@@ -1,0 +1,54 @@
+{{template "base" .}}
+
+{{define "title"}}Bookings — Admin{{end}}
+{{define "container_class"}} container--wide{{end}}
+
+{{define "content"}}
+<header class="header">
+    <h1 class="header__title">Bookings</h1>
+    <p class="header__subtitle">All upcoming and recent bookings</p>
+</header>
+
+{{template "admin_nav" "bookings"}}
+
+<div class="table-wrap">
+<table>
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Guest</th>
+            <th>Email</th>
+            <th>Status</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .Bookings}}
+        <tr>
+            <td>{{.StartTime.Format "Jan 2, 2006"}}</td>
+            <td>{{.StartTime.Format "15:04"}} — {{.EndTime.Format "15:04"}}</td>
+            <td>{{.GuestName}}</td>
+            <td>{{.GuestEmail}}</td>
+            <td>
+                {{if eq .Status "confirmed"}}
+                <span class="badge badge--confirmed">Confirmed</span>
+                {{else}}
+                <span class="badge badge--cancelled">Cancelled</span>
+                {{end}}
+            </td>
+            <td style="text-align:right">
+                {{if eq .Status "confirmed"}}
+                <button class="btn btn--danger btn--small"
+                        hx-post="/admin/bookings/{{.ID}}/cancel"
+                        hx-confirm="Cancel this booking?">Cancel</button>
+                {{end}}
+            </td>
+        </tr>
+    {{else}}
+        <tr><td colspan="6" style="text-align:center;color:var(--text-tertiary)">No bookings yet.</td></tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+{{end}}

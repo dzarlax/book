@@ -1,0 +1,58 @@
+{{template "base" .}}
+
+{{define "title"}}{{if .IsNew}}New{{else}}Edit{{end}} Meeting Type — Admin{{end}}
+{{define "container_class"}} container--wide{{end}}
+
+{{define "content"}}
+<header class="header">
+    <a href="/admin/types" style="text-decoration:none;color:var(--text-tertiary);font-size:0.85rem">&larr; Back to types</a>
+    <h1 class="header__title">{{if .IsNew}}New Meeting Type{{else}}Edit: {{.Meeting.Title}}{{end}}</h1>
+</header>
+
+{{template "admin_nav" "types"}}
+
+<div class="card" style="max-width:600px">
+    <form {{if .IsNew}}hx-post="/admin/types"{{else}}hx-post="/admin/types/{{.Meeting.ID}}"{{end}}>
+        <div class="form-group">
+            <label for="title">Title</label>
+            <input type="text" id="title" name="title" value="{{.Meeting.Title}}" required placeholder="e.g. Consultation">
+        </div>
+        <div class="form-group">
+            <label for="slug">URL Slug</label>
+            <input type="text" id="slug" name="slug" value="{{.Meeting.Slug}}" required placeholder="e.g. consultation" pattern="[a-z0-9-]+">
+        </div>
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" placeholder="What is this meeting about?">{{.Meeting.Description}}</textarea>
+        </div>
+        <div class="form-group">
+            <label for="calendar_id">Calendar ID</label>
+            <input type="text" id="calendar_id" name="calendar_id" value="{{.Meeting.CalendarID}}" placeholder="e.g. google:primary, microsoft:calendar-id">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="duration_min">Duration (min)</label>
+                <input type="number" id="duration_min" name="duration_min" value="{{.Meeting.DurationMin}}" min="5" max="480">
+            </div>
+            <div class="form-group">
+                <label for="buffer_min">Buffer (min)</label>
+                <input type="number" id="buffer_min" name="buffer_min" value="{{.Meeting.BufferMin}}" min="0" max="120">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="max_per_day">Max per day</label>
+                <input type="number" id="max_per_day" name="max_per_day" value="{{.Meeting.MaxPerDay}}" min="0" max="50">
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:12px;padding-top:24px">
+                <input type="checkbox" id="active" name="active" class="toggle" {{if .Meeting.Active}}checked{{end}}>
+                <label for="active" style="margin:0;text-transform:none;font-size:0.9rem">Active</label>
+            </div>
+        </div>
+        <div style="margin-top:24px;display:flex;gap:12px">
+            <button type="submit" class="btn btn--primary">{{if .IsNew}}Create{{else}}Save Changes{{end}}</button>
+            <a href="/admin/types" class="btn btn--secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{{end}}

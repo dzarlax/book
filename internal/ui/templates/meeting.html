@@ -1,0 +1,69 @@
+{{template "base" .}}
+
+{{define "title"}}{{.Meeting.Title}} — Book{{end}}
+
+{{define "content"}}
+<header class="header">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+            <a href="/" style="text-decoration:none;color:var(--text-tertiary);font-size:0.85rem">&larr; Back</a>
+            <h1 class="header__title">{{.Meeting.Title}}</h1>
+            {{if .Meeting.Description}}
+            <p class="header__subtitle">{{.Meeting.Description}}</p>
+            {{end}}
+        </div>
+        <button class="theme-toggle" onclick="toggleDarkMode()" aria-label="Toggle dark mode">
+            <span>&#9790;</span>
+        </button>
+    </div>
+    <div class="card__meta" style="margin-top:12px">
+        <span>{{.Meeting.DurationMin}} min</span>
+    </div>
+</header>
+
+<div class="date-nav">
+    <label for="date-picker" style="font-weight:500;font-size:0.9rem">Select a date:</label>
+    <input type="date" id="date-picker" name="date" value="{{.Today}}" min="{{.Today}}"
+           hx-get="/{{.Meeting.Slug}}/slots"
+           hx-target="#slots-container"
+           hx-include="[name='tz']"
+           hx-trigger="change"
+           hx-indicator="#slots-loading">
+    <input type="hidden" name="tz" id="guest-tz">
+    <span class="htmx-indicator" id="slots-loading"><span class="spinner"></span></span>
+</div>
+
+<div id="slots-container">
+    <p style="color:var(--text-tertiary)">Select a date to see available times.</p>
+</div>
+
+<div id="booking-form" style="display:none;margin-top:32px">
+    <h3 style="margin-bottom:16px;font-weight:600">Your details</h3>
+    <form hx-post="/{{.Meeting.Slug}}/book" hx-include="[name='tz']">
+        <input type="hidden" name="start" id="selected-start">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" required placeholder="Your name">
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" required placeholder="you@example.com">
+            </div>
+        </div>
+        <button type="submit" class="btn btn--primary btn--block">Confirm Booking</button>
+    </form>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+    // Detect guest timezone
+    document.getElementById('guest-tz').value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    // Load initial slots
+    document.addEventListener('DOMContentLoaded', function() {
+        htmx.trigger(document.getElementById('date-picker'), 'change');
+    });
+</script>
+{{end}}

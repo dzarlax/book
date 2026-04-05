@@ -1,0 +1,25 @@
+{{if .Slots}}
+<div class="slots-grid">
+    {{range .Slots}}
+    {{if .Available}}
+    <button class="slot" onclick="selectSlot(this, '{{.Start.Format "2006-01-02T15:04"}}')">
+        {{.Start.Format "15:04"}}
+    </button>
+    {{else}}
+    <span class="slot slot--unavailable">{{.Start.Format "15:04"}}</span>
+    {{end}}
+    {{end}}
+</div>
+
+<script>
+function selectSlot(el, startTime) {
+    document.querySelectorAll('.slot--selected').forEach(s => s.classList.remove('slot--selected'));
+    el.classList.add('slot--selected');
+    document.getElementById('selected-start').value = startTime;
+    document.getElementById('booking-form').style.display = 'block';
+    document.getElementById('booking-form').scrollIntoView({behavior: 'smooth'});
+}
+</script>
+{{else}}
+<p style="color:var(--text-tertiary);padding:24px 0">No available slots for this date.</p>
+{{end}}

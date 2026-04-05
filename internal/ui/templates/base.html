@@ -1,0 +1,38 @@
+{{define "base"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{block "title" .}}Book{{end}}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</head>
+<body>
+    <div class="container{{block "container_class" .}}{{end}}">
+        {{block "content" .}}{{end}}
+        <footer class="footer">
+            Powered by Book
+        </footer>
+    </div>
+    <script>
+        // Dark mode
+        const dm = localStorage.getItem('dark-mode');
+        if (dm === 'true' || (!dm && matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.setAttribute('dark-mode', '');
+        }
+        function toggleDarkMode() {
+            const on = document.documentElement.hasAttribute('dark-mode');
+            if (on) {
+                document.documentElement.removeAttribute('dark-mode');
+                localStorage.setItem('dark-mode', 'false');
+            } else {
+                document.documentElement.setAttribute('dark-mode', '');
+                localStorage.setItem('dark-mode', 'true');
+            }
+        }
+    </script>
+    {{block "scripts" .}}{{end}}
+</body>
+</html>
+{{end}}

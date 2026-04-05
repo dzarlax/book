@@ -1,0 +1,33 @@
+{{template "base" .}}
+
+{{define "title"}}Book a Meeting{{end}}
+
+{{define "content"}}
+<header class="header">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+            <h1 class="header__title">Book a Meeting</h1>
+            <p class="header__subtitle">Choose a meeting type to get started</p>
+        </div>
+        <button class="theme-toggle" onclick="toggleDarkMode()" aria-label="Toggle dark mode">
+            <span id="theme-icon">&#9790;</span>
+        </button>
+    </div>
+</header>
+
+<div class="card-grid">
+    {{range .Types}}
+    <a href="/{{.Slug}}" class="card" style="text-decoration:none;color:inherit">
+        <h2 class="card__title">{{.Title}}</h2>
+        {{if .Description}}
+        <p class="card__description">{{.Description}}</p>
+        {{end}}
+        <div class="card__meta">
+            <span>{{.DurationMin}} min</span>
+        </div>
+    </a>
+    {{else}}
+    <p style="color:var(--text-secondary)">No meeting types available yet.</p>
+    {{end}}
+</div>
+{{end}}

@@ -1,0 +1,61 @@
+{{template "base" .}}
+
+{{define "title"}}Meeting Types — Admin{{end}}
+{{define "container_class"}} container--wide{{end}}
+
+{{define "content"}}
+<header class="header">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+            <h1 class="header__title">Meeting Types</h1>
+        </div>
+        <a href="/admin/types/new" class="btn btn--primary btn--small">+ New Type</a>
+    </div>
+</header>
+
+{{template "admin_nav" "types"}}
+
+<div class="table-wrap">
+<table>
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Slug</th>
+            <th>Duration</th>
+            <th>Buffer</th>
+            <th>Max/Day</th>
+            <th>Status</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .Types}}
+        <tr>
+            <td><strong>{{.Title}}</strong></td>
+            <td><code>/{{.Slug}}</code></td>
+            <td>{{.DurationMin}} min</td>
+            <td>{{.BufferMin}} min</td>
+            <td>{{.MaxPerDay}}</td>
+            <td>
+                {{if .Active}}
+                <span class="badge badge--active">Active</span>
+                {{else}}
+                <span class="badge badge--inactive">Inactive</span>
+                {{end}}
+            </td>
+            <td style="text-align:right">
+                <a href="/admin/types/{{.ID}}/edit" class="btn btn--secondary btn--small">Edit</a>
+                <button class="btn btn--danger btn--small"
+                        hx-delete="/admin/types/{{.ID}}"
+                        hx-confirm="Delete this meeting type?"
+                        hx-target="closest tr"
+                        hx-swap="outerHTML">Delete</button>
+            </td>
+        </tr>
+    {{else}}
+        <tr><td colspan="7" style="text-align:center;color:var(--text-tertiary)">No meeting types yet. Create one to get started.</td></tr>
+    {{end}}
+    </tbody>
+</table>
+</div>
+{{end}}

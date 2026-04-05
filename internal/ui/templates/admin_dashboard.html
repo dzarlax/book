@@ -1,0 +1,33 @@
+{{template "base" .}}
+
+{{define "title"}}Admin — Book{{end}}
+{{define "container_class"}} container--wide{{end}}
+
+{{define "content"}}
+<header class="header">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+            <h1 class="header__title">Admin</h1>
+            <p class="header__subtitle">Manage your booking page</p>
+        </div>
+        <button class="theme-toggle" onclick="toggleDarkMode()" aria-label="Toggle dark mode">
+            <span>&#9790;</span>
+        </button>
+    </div>
+</header>
+
+{{template "admin_nav" "dashboard"}}
+
+<div class="card-grid" style="grid-template-columns:1fr 1fr">
+    <div class="card">
+        <h3 class="card__title">Meeting Types</h3>
+        <p class="card__description">{{len .Types}} configured</p>
+        <a href="/admin/types" class="btn btn--secondary btn--small">Manage</a>
+    </div>
+    <div class="card">
+        <h3 class="card__title">Upcoming Bookings</h3>
+        <p class="card__description">{{len .Bookings}} this week</p>
+        <a href="/admin/bookings" class="btn btn--secondary btn--small">View all</a>
+    </div>
+</div>
+{{end}}

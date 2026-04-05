@@ -1,0 +1,25 @@
+# Binaries
+book
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Build
+/dist/
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+coverage.out

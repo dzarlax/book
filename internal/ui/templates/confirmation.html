@@ -1,0 +1,16 @@
+{{template "base" .}}
+
+{{define "title"}}Booking Confirmed — Book{{end}}
+
+{{define "content"}}
+<div class="confirmation">
+    <div class="confirmation__icon">&#10003;</div>
+    <h1 class="confirmation__title">You're booked!</h1>
+    <p class="confirmation__text">
+        Your meeting has been confirmed. You'll receive a calendar invite shortly.
+    </p>
+    <div style="margin-top:32px">
+        <a href="/" class="btn btn--secondary">Book another meeting</a>
+    </div>
+</div>
+{{end}}

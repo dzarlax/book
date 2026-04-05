@@ -1,0 +1,32 @@
+{{template "base" .}}
+
+{{define "title"}}Working Hours — Admin{{end}}
+{{define "container_class"}} container--wide{{end}}
+
+{{define "content"}}
+<header class="header">
+    <h1 class="header__title">Working Hours</h1>
+    <p class="header__subtitle">Set your availability for each day of the week</p>
+</header>
+
+{{template "admin_nav" "hours"}}
+
+<div class="card">
+    <form hx-post="/admin/hours">
+        <div class="hours-grid">
+            {{$days := list "Sunday" "Monday" "Tuesday" "Wednesday" "Thursday" "Friday" "Saturday"}}
+            {{range .Days}}
+            <div class="hours-row">
+                <label>{{dayName .DayOfWeek}}</label>
+                <input type="checkbox" name="active_{{.DayOfWeek}}" class="toggle" {{if .Active}}checked{{end}}>
+                <input type="time" name="start_{{.DayOfWeek}}" value="{{.StartTime}}">
+                <input type="time" name="end_{{.DayOfWeek}}" value="{{.EndTime}}">
+            </div>
+            {{end}}
+        </div>
+        <div style="margin-top:24px">
+            <button type="submit" class="btn btn--primary">Save Hours</button>
+        </div>
+    </form>
+</div>
+{{end}}
