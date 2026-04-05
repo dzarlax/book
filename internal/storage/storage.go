@@ -197,6 +197,29 @@ func (s *Storage) GetBookingsForDay(ctx context.Context, date time.Time, meeting
 	return bookings, rows.Err()
 }
 
+func (s *Storage) GetBooking(ctx context.Context, id int64) (*model.Booking, error) {
+	var b model.Booking
+	err := s.db.QueryRowContext(ctx,
+		`SELECT b.id, b.meeting_type_id, COALESCE(mt.title, ''), b.guest_name, b.guest_email, b.start_time, b.end_time, b.timezone, b.status, b.calendar_event_id, b.created_at
+		 FROM bookings b LEFT JOIN meeting_types mt ON mt.id = b.meeting_type_id WHERE b.id = $1`, id,
+	).Scan(&b.ID, &b.MeetingTypeID, &b.MeetingTypeTitle, &b.GuestName, &b.GuestEmail, &b.StartTime, &b.EndTime, &b.Timezone, &b.Status, &b.CalendarEvent, &b.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return &b, err
+}
+
+func (s *Storage) GetMeetingTypeByID(ctx context.Context, id int64) (*model.MeetingType, error) {
+	var mt model.MeetingType
+	err := s.db.QueryRowContext(ctx,
+		"SELECT id, slug, title, description, duration_min, buffer_min, max_per_day, calendar_id, video_call, active, created_at FROM meeting_types WHERE id = $1", id,
+	).Scan(&mt.ID, &mt.Slug, &mt.Title, &mt.Description, &mt.DurationMin, &mt.BufferMin, &mt.MaxPerDay, &mt.CalendarID, &mt.VideoCall, &mt.Active, &mt.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return &mt, err
+}
+
 func (s *Storage) CancelBooking(ctx context.Context, id int64) error {
 	_, err := s.db.ExecContext(ctx, "UPDATE bookings SET status = 'cancelled' WHERE id = $1", id)
 	return err

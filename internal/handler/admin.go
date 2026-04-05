@@ -241,10 +241,25 @@ func (h *AdminHandler) listBookings(w http.ResponseWriter, r *http.Request) {
 
 func (h *AdminHandler) cancelBooking(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+
+	// Get booking to find calendar event ID
+	booking, _ := h.store.GetBooking(r.Context(), id)
+
 	if err := h.store.CancelBooking(r.Context(), id); err != nil {
 		http.Error(w, "Failed to cancel", http.StatusInternalServerError)
 		return
 	}
+
+	// Delete calendar event if exists
+	if booking != nil && booking.CalendarEvent != "" && h.cal.Enabled() {
+		mt, _ := h.store.GetMeetingTypeByID(r.Context(), booking.MeetingTypeID)
+		if mt != nil && mt.CalendarID != "" {
+			if err := h.cal.DeleteEvent(r.Context(), mt.CalendarID, booking.CalendarEvent); err != nil {
+				log.Printf("calendar delete error (non-fatal): %v", err)
+			}
+		}
+	}
+
 	w.Header().Set("HX-Refresh", "true")
 	w.WriteHeader(http.StatusOK)
 }
