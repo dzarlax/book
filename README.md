@@ -46,10 +46,47 @@ DATABASE_URL=postgres://... ./book
 
 ## Deploy
 
-Docker image built by GitHub Actions on push to `main`:
+Docker image built by GitHub Actions on push to `main`.
 
-```bash
-docker compose pull && docker compose up -d
+Example `docker-compose.yml` with Traefik + Authentik:
+
+```yaml
+services:
+  book:
+    image: ghcr.io/dzarlax/book:latest
+    container_name: book
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      - traefik
+      - infra
+    labels:
+      - "traefik.enable=true"
+      # Public router — booking pages, no auth
+      - "traefik.http.routers.book.entrypoints=https"
+      - "traefik.http.routers.book.rule=Host(`book.example.com`) && !PathPrefix(`/admin`)"
+      - "traefik.http.routers.book.tls=true"
+      - "traefik.http.routers.book.tls.certresolver=letsEncrypt"
+      - "traefik.http.routers.book.middlewares=book-ratelimit"
+      - "traefik.http.routers.book.service=book"
+      # Rate limit
+      - "traefik.http.middlewares.book-ratelimit.ratelimit.average=20"
+      - "traefik.http.middlewares.book-ratelimit.ratelimit.burst=50"
+      # Admin router — protected by Authentik ForwardAuth
+      - "traefik.http.routers.book-admin.entrypoints=https"
+      - "traefik.http.routers.book-admin.rule=Host(`book.example.com`) && PathPrefix(`/admin`)"
+      - "traefik.http.routers.book-admin.tls=true"
+      - "traefik.http.routers.book-admin.tls.certresolver=letsEncrypt"
+      - "traefik.http.routers.book-admin.middlewares=authentik-auth"
+      - "traefik.http.routers.book-admin.service=book"
+      # Service
+      - "traefik.http.services.book.loadbalancer.server.port=8080"
+
+networks:
+  traefik:
+    external: true
+  infra:
+    external: true
 ```
 
 ## Project Structure
