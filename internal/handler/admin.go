@@ -25,12 +25,17 @@ func NewAdminHandler(store *storage.Storage, cal *calendarapi.Client, tmpl *temp
 	return &AdminHandler{store: store, cal: cal, tmpl: tmpl, timezone: tz}
 }
 
+type calendarGroup struct {
+	Provider  string
+	Calendars []calendarOption
+}
+
 type calendarOption struct {
 	ID   string
 	Name string
 }
 
-func (h *AdminHandler) fetchCalendars(r *http.Request) []calendarOption {
+func (h *AdminHandler) fetchCalendarGroups(r *http.Request) []calendarGroup {
 	if !h.cal.Enabled() {
 		return nil
 	}
@@ -39,11 +44,32 @@ func (h *AdminHandler) fetchCalendars(r *http.Request) []calendarOption {
 		log.Printf("fetch calendars: %v", err)
 		return nil
 	}
-	opts := make([]calendarOption, len(cals))
-	for i, c := range cals {
-		opts[i] = calendarOption{ID: c.ID, Name: c.Name}
+	grouped := make(map[string][]calendarOption)
+	var order []string
+	for _, c := range cals {
+		if _, ok := grouped[c.Provider]; !ok {
+			order = append(order, c.Provider)
+		}
+		grouped[c.Provider] = append(grouped[c.Provider], calendarOption{ID: c.ID, Name: c.Name})
 	}
-	return opts
+	groups := make([]calendarGroup, len(order))
+	for i, p := range order {
+		groups[i] = calendarGroup{Provider: providerLabel(p), Calendars: grouped[p]}
+	}
+	return groups
+}
+
+func providerLabel(p string) string {
+	switch p {
+	case "google":
+		return "Google Calendar"
+	case "microsoft":
+		return "Microsoft 365"
+	case "apple":
+		return "Apple iCloud"
+	default:
+		return p
+	}
 }
 
 func (h *AdminHandler) Routes() chi.Router {
@@ -92,7 +118,7 @@ func (h *AdminHandler) newTypeForm(w http.ResponseWriter, r *http.Request) {
 		"ContainerClass": " container--wide",
 		"Meeting":        &model.MeetingType{DurationMin: 30, BufferMin: 10, MaxPerDay: 8, Active: true},
 		"IsNew":          true,
-		"Calendars":      h.fetchCalendars(r),
+		"Calendars":      h.fetchCalendarGroups(r),
 	})
 }
 
@@ -120,7 +146,7 @@ func (h *AdminHandler) editTypeForm(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	h.render(w, "admin_type_form.html", map[string]any{"Title": "Edit — Admin", "ContainerClass": " container--wide", "Meeting": mt, "IsNew": false, "Calendars": h.fetchCalendars(r)})
+	h.render(w, "admin_type_form.html", map[string]any{"Title": "Edit — Admin", "ContainerClass": " container--wide", "Meeting": mt, "IsNew": false, "Calendars": h.fetchCalendarGroups(r)})
 }
 
 func (h *AdminHandler) updateType(w http.ResponseWriter, r *http.Request) {

@@ -25,7 +25,13 @@
            hx-include="[name='tz']"
            hx-trigger="change"
            hx-indicator="#slots-loading">
-    <input type="hidden" name="tz" id="guest-tz">
+    <select name="tz" id="guest-tz"
+            hx-get="/{{.Meeting.Slug}}/slots"
+            hx-target="#slots-container"
+            hx-include="[name='date']"
+            hx-trigger="change"
+            style="min-width:200px">
+    </select>
     <span class="htmx-indicator" id="slots-loading"><span class="spinner"></span></span>
 </div>
 
@@ -52,10 +58,31 @@
 </div>
 
 <script>
-    document.getElementById('guest-tz').value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+(function() {
+    var detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    var zones = [
+        "Europe/London", "Europe/Berlin", "Europe/Paris", "Europe/Madrid",
+        "Europe/Rome", "Europe/Belgrade", "Europe/Moscow", "Europe/Istanbul",
+        "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+        "America/Sao_Paulo", "Asia/Dubai", "Asia/Kolkata", "Asia/Shanghai",
+        "Asia/Tokyo", "Asia/Seoul", "Australia/Sydney", "Pacific/Auckland",
+        "UTC"
+    ];
+    if (zones.indexOf(detected) === -1) {
+        zones.unshift(detected);
+    }
+    var sel = document.getElementById('guest-tz');
+    zones.forEach(function(tz) {
+        var opt = document.createElement('option');
+        opt.value = tz;
+        opt.textContent = tz.replace(/_/g, ' ');
+        if (tz === detected) opt.selected = true;
+        sel.appendChild(opt);
+    });
     document.addEventListener('DOMContentLoaded', function() {
         htmx.trigger(document.getElementById('date-picker'), 'change');
     });
+})();
 </script>
 
 {{template "foot" .}}

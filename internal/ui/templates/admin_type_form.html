@@ -28,7 +28,11 @@
                 <option value="">— No calendar —</option>
                 {{$selected := .Meeting.CalendarID}}
                 {{range .Calendars}}
-                <option value="{{.ID}}" {{if eq .ID $selected}}selected{{end}}>{{.Name}} ({{.ID}})</option>
+                <optgroup label="{{.Provider}}">
+                    {{range .Calendars}}
+                    <option value="{{.ID}}" {{if eq .ID $selected}}selected{{end}}>{{.Name}}</option>
+                    {{end}}
+                </optgroup>
                 {{end}}
             </select>
         </div>
