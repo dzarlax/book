@@ -435,23 +435,64 @@ tr:hover {
     color: var(--text);
 }
 
-/* Working hours grid */
+/* Working hours */
 
-.hours-grid {
-    display: grid;
-    gap: 8px;
-}
-
-.hours-row {
-    display: grid;
-    grid-template-columns: 100px auto 1fr 1fr;
-    gap: 12px;
+.wh-day {
+    display: flex;
     align-items: center;
-    padding: 8px 0;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
 }
 
-.hours-row label {
+.wh-day:last-of-type {
+    border-bottom: none;
+}
+
+.wh-day--off .wh-day__times {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.wh-day__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 160px;
+}
+
+.wh-day__name {
     font-weight: 500;
+    font-size: 0.95rem;
+}
+
+.wh-day__times {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: opacity var(--transition);
+}
+
+.wh-time {
+    width: 64px;
+    text-align: center;
+    padding: 8px 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.wh-time:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.wh-sep {
+    color: var(--text-tertiary);
     font-size: 0.9rem;
 }
 
@@ -536,14 +577,17 @@ tr:hover {
         padding: 6px 10px;
     }
 
-    .hours-row {
-        grid-template-columns: 70px auto 1fr 1fr;
-        gap: 6px;
-        font-size: 0.85rem;
+    .wh-day {
+        flex-wrap: wrap;
+        gap: 8px;
     }
 
-    .hours-row input[type="time"] {
-        padding: 6px 4px;
+    .wh-day__header {
+        min-width: 140px;
+    }
+
+    .wh-time {
+        width: 56px;
         font-size: 0.85rem;
     }
 

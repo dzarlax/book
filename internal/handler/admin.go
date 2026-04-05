@@ -98,13 +98,19 @@ func (h *AdminHandler) dashboard(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().In(h.timezone)
 	from := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, h.timezone)
 	to := from.Add(7 * 24 * time.Hour)
-	bookings, _ := h.store.ListBookings(r.Context(), from, to)
+	allBookings, _ := h.store.ListBookings(r.Context(), from, to)
+	var upcoming []model.Booking
+	for _, b := range allBookings {
+		if b.Status == "confirmed" {
+			upcoming = append(upcoming, b)
+		}
+	}
 
 	h.render(w, "admin_dashboard.html", map[string]any{
 		"Title":          "Admin — Book",
 		"ContainerClass": " container--wide",
 		"Types":          types,
-		"Bookings":       bookings,
+		"Bookings":       upcoming,
 	})
 }
 

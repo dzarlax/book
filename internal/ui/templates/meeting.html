@@ -49,6 +49,10 @@
     <h3 style="margin-bottom:16px;font-weight:600">Your details</h3>
     <form hx-post="/{{.Meeting.Slug}}/book" hx-include="[name='tz']">
         <input type="hidden" name="start" id="selected-start">
+        <div class="form-group">
+            <label for="subject">Meeting subject</label>
+            <input type="text" id="subject" name="subject" placeholder="What would you like to discuss?">
+        </div>
         <div class="form-row">
             <div class="form-group">
                 <label for="name">Name</label>

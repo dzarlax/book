@@ -151,8 +151,9 @@ func (s *Storage) CreateBooking(ctx context.Context, b *model.Booking) error {
 
 func (s *Storage) ListBookings(ctx context.Context, from, to time.Time) ([]model.Booking, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, meeting_type_id, guest_name, guest_email, start_time, end_time, timezone, status, calendar_event_id, created_at
-		 FROM bookings WHERE start_time >= $1 AND start_time < $2 ORDER BY start_time`,
+		`SELECT b.id, b.meeting_type_id, COALESCE(mt.title, ''), b.guest_name, b.guest_email, b.start_time, b.end_time, b.timezone, b.status, b.calendar_event_id, b.created_at
+		 FROM bookings b LEFT JOIN meeting_types mt ON mt.id = b.meeting_type_id
+		 WHERE b.start_time >= $1 AND b.start_time < $2 ORDER BY b.start_time`,
 		from, to,
 	)
 	if err != nil {
@@ -163,7 +164,7 @@ func (s *Storage) ListBookings(ctx context.Context, from, to time.Time) ([]model
 	var bookings []model.Booking
 	for rows.Next() {
 		var b model.Booking
-		if err := rows.Scan(&b.ID, &b.MeetingTypeID, &b.GuestName, &b.GuestEmail, &b.StartTime, &b.EndTime, &b.Timezone, &b.Status, &b.CalendarEvent, &b.CreatedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.MeetingTypeID, &b.MeetingTypeTitle, &b.GuestName, &b.GuestEmail, &b.StartTime, &b.EndTime, &b.Timezone, &b.Status, &b.CalendarEvent, &b.CreatedAt); err != nil {
 			return nil, err
 		}
 		bookings = append(bookings, b)

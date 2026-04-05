@@ -19,6 +19,7 @@
         <tr>
             <th>Date</th>
             <th>Time</th>
+            <th>Type</th>
             <th>Guest</th>
             <th>Email</th>
             <th>Status</th>
@@ -30,6 +31,7 @@
         <tr>
             <td>{{.StartTime.Format "Jan 2, 2006"}}</td>
             <td>{{.StartTime.Format "15:04"}} — {{.EndTime.Format "15:04"}}</td>
+            <td>{{.MeetingTypeTitle}}</td>
             <td>{{.GuestName}}</td>
             <td>{{.GuestEmail}}</td>
             <td>
@@ -48,7 +50,7 @@
             </td>
         </tr>
     {{else}}
-        <tr><td colspan="6" style="text-align:center;color:var(--text-tertiary)">No bookings yet.</td></tr>
+        <tr><td colspan="7" style="text-align:center;color:var(--text-tertiary)">No bookings yet.</td></tr>
     {{end}}
     </tbody>
 </table>

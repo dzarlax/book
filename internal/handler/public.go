@@ -220,6 +220,7 @@ func (h *PublicHandler) book(w http.ResponseWriter, r *http.Request) {
 	guestTZ := r.FormValue("tz")
 	guestName := r.FormValue("name")
 	guestEmail := r.FormValue("email")
+	subject := r.FormValue("subject")
 
 	if guestName == "" || guestEmail == "" || startStr == "" {
 		http.Error(w, "Missing fields", http.StatusBadRequest)
@@ -242,12 +243,18 @@ func (h *PublicHandler) book(w http.ResponseWriter, r *http.Request) {
 	// Create calendar event if calendar is configured
 	var calEventID string
 	if h.cal.Enabled() && mt.CalendarID != "" {
+		eventTitle := fmt.Sprintf("%s with %s", mt.Title, guestName)
+		eventDesc := fmt.Sprintf("Booked via book.dzarlax.dev\nGuest: %s (%s)", guestName, guestEmail)
+		if subject != "" {
+			eventTitle = fmt.Sprintf("%s: %s", guestName, subject)
+			eventDesc = fmt.Sprintf("Type: %s\nGuest: %s (%s)\nSubject: %s\n\nBooked via book.dzarlax.dev", mt.Title, guestName, guestEmail, subject)
+		}
 		ev, err := h.cal.CreateEvent(r.Context(), calendarapi.CreateEventRequest{
 			CalendarID:  mt.CalendarID,
-			Title:       fmt.Sprintf("%s with %s", mt.Title, guestName),
+			Title:       eventTitle,
 			Start:       startTime.UTC().Format(time.RFC3339),
 			End:         endTime.UTC().Format(time.RFC3339),
-			Description: fmt.Sprintf("Booked via Book\nGuest: %s (%s)", guestName, guestEmail),
+			Description: eventDesc,
 			Attendees: []calendarapi.Attendee{
 				{Email: guestEmail, Name: guestName},
 			},

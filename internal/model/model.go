@@ -24,16 +24,17 @@ type WorkingHours struct {
 }
 
 type Booking struct {
-	ID            int64     `json:"id"`
-	MeetingTypeID int64     `json:"meeting_type_id"`
-	GuestName     string    `json:"guest_name"`
-	GuestEmail    string    `json:"guest_email"`
-	StartTime     time.Time `json:"start_time"`
-	EndTime       time.Time `json:"end_time"`
-	Timezone      string    `json:"timezone"`
-	Status        string    `json:"status"` // confirmed, cancelled
-	CalendarEvent string    `json:"calendar_event_id"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID               int64     `json:"id"`
+	MeetingTypeID    int64     `json:"meeting_type_id"`
+	MeetingTypeTitle string    `json:"meeting_type_title"` // from JOIN, not in DB
+	GuestName        string    `json:"guest_name"`
+	GuestEmail       string    `json:"guest_email"`
+	StartTime        time.Time `json:"start_time"`
+	EndTime          time.Time `json:"end_time"`
+	Timezone         string    `json:"timezone"`
+	Status           string    `json:"status"` // confirmed, cancelled
+	CalendarEvent    string    `json:"calendar_event_id"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 type TimeSlot struct {

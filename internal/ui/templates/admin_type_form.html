@@ -6,6 +6,7 @@
         <div>
             <a href="/admin/types" style="text-decoration:none;color:var(--text-tertiary);font-size:0.85rem">&larr; Back to types</a>
             <h1 class="header__title">{{if .IsNew}}New Meeting Type{{else}}Edit: {{.Meeting.Title}}{{end}}</h1>
+            <p class="header__subtitle">{{if .IsNew}}Set up a new type of meeting{{else}}Update meeting type settings{{end}}</p>
         </div>
         {{template "theme_toggle"}}
     </div>

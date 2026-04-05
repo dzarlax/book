@@ -13,18 +13,24 @@
 
 {{template "admin_nav" "hours"}}
 
-<div class="card">
+<div class="card" style="max-width:520px">
     <form hx-post="/admin/hours">
-        <div class="hours-grid">
-            {{range .Days}}
-            <div class="hours-row">
-                <label>{{dayName .DayOfWeek}}</label>
-                <input type="checkbox" name="active_{{.DayOfWeek}}" class="toggle" {{if .Active}}checked{{end}}>
-                <input type="time" name="start_{{.DayOfWeek}}" value="{{.StartTime}}">
-                <input type="time" name="end_{{.DayOfWeek}}" value="{{.EndTime}}">
+        {{range .Days}}
+        <div class="wh-day {{if not .Active}}wh-day--off{{end}}">
+            <div class="wh-day__header">
+                <input type="checkbox" name="active_{{.DayOfWeek}}" class="toggle" {{if .Active}}checked{{end}}
+                       onchange="this.closest('.wh-day').classList.toggle('wh-day--off', !this.checked)">
+                <span class="wh-day__name">{{dayName .DayOfWeek}}</span>
             </div>
-            {{end}}
+            <div class="wh-day__times">
+                <input type="text" name="start_{{.DayOfWeek}}" value="{{.StartTime}}"
+                       class="wh-time" placeholder="09:00" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5">
+                <span class="wh-sep">&ndash;</span>
+                <input type="text" name="end_{{.DayOfWeek}}" value="{{.EndTime}}"
+                       class="wh-time" placeholder="17:00" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5">
+            </div>
         </div>
+        {{end}}
         <div style="margin-top:24px">
             <button type="submit" class="btn btn--primary">Save Hours</button>
         </div>
