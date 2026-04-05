@@ -22,6 +22,7 @@ type Calendar struct {
 	Provider string `json:"provider"`
 	Name     string `json:"name"`
 	Primary  bool   `json:"primary,omitempty"`
+	ReadOnly bool   `json:"read_only,omitempty"`
 }
 
 type Event struct {

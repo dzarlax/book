@@ -47,6 +47,9 @@ func (h *AdminHandler) fetchCalendarGroups(r *http.Request) []calendarGroup {
 	grouped := make(map[string][]calendarOption)
 	var order []string
 	for _, c := range cals {
+		if c.ReadOnly {
+			continue
+		}
 		if _, ok := grouped[c.Provider]; !ok {
 			order = append(order, c.Provider)
 		}

@@ -2,8 +2,13 @@
 {{template "head" .}}
 
 <header class="header">
-    <a href="/admin/types" style="text-decoration:none;color:var(--text-tertiary);font-size:0.85rem">&larr; Back to types</a>
-    <h1 class="header__title">{{if .IsNew}}New Meeting Type{{else}}Edit: {{.Meeting.Title}}{{end}}</h1>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+            <a href="/admin/types" style="text-decoration:none;color:var(--text-tertiary);font-size:0.85rem">&larr; Back to types</a>
+            <h1 class="header__title">{{if .IsNew}}New Meeting Type{{else}}Edit: {{.Meeting.Title}}{{end}}</h1>
+        </div>
+        {{template "theme_toggle"}}
+    </div>
 </header>
 
 {{template "admin_nav" "types"}}

@@ -2,8 +2,13 @@
 {{template "head" .}}
 
 <header class="header">
-    <h1 class="header__title">Bookings</h1>
-    <p class="header__subtitle">All upcoming and recent bookings</p>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+            <h1 class="header__title">Bookings</h1>
+            <p class="header__subtitle">All upcoming and recent bookings</p>
+        </div>
+        {{template "theme_toggle"}}
+    </div>
 </header>
 
 {{template "admin_nav" "bookings"}}

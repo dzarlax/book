@@ -6,7 +6,10 @@
         <div>
             <h1 class="header__title">Meeting Types</h1>
         </div>
-        <a href="/admin/types/new" class="btn btn--primary btn--small">+ New Type</a>
+        <div style="display:flex;gap:8px;align-items:center">
+            <a href="/admin/types/new" class="btn btn--primary btn--small">+ New Type</a>
+            {{template "theme_toggle"}}
+        </div>
     </div>
 </header>
 
