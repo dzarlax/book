@@ -178,13 +178,19 @@ func (h *AdminHandler) workingHours(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
-	// Fill all 7 days
-	days := make([]model.WorkingHours, 7)
-	for i := range days {
-		days[i] = model.WorkingHours{DayOfWeek: i, StartTime: "09:00", EndTime: "17:00"}
+	// Fill all 7 days, keyed by day_of_week
+	byDay := make(map[int]model.WorkingHours, 7)
+	for i := 0; i < 7; i++ {
+		byDay[i] = model.WorkingHours{DayOfWeek: i, StartTime: "09:00", EndTime: "17:00"}
 	}
 	for _, wh := range hours {
-		days[wh.DayOfWeek] = wh
+		byDay[wh.DayOfWeek] = wh
+	}
+	// Order: Mon(1)..Sun(0)
+	order := []int{1, 2, 3, 4, 5, 6, 0}
+	days := make([]model.WorkingHours, 7)
+	for i, d := range order {
+		days[i] = byDay[d]
 	}
 	h.render(w, "admin_hours.html", map[string]any{"Title": "Working Hours — Admin", "ContainerClass": " container--wide", "Days": days})
 }

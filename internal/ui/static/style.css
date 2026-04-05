@@ -228,7 +228,9 @@ body {
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--surface);
+    color: var(--text);
     cursor: pointer;
+    font-family: var(--font);
     font-size: 0.9rem;
     font-weight: 500;
     transition: all var(--transition);
@@ -455,14 +457,20 @@ tr:hover {
 /* Checkbox */
 
 .toggle {
+    -webkit-appearance: none;
     appearance: none;
+    border: none;
+    outline: none;
     width: 40px;
+    min-width: 40px;
+    max-width: 40px;
     height: 22px;
     background: var(--surface-2);
     border-radius: 11px;
     position: relative;
     cursor: pointer;
     transition: background var(--transition);
+    flex-shrink: 0;
 }
 
 .toggle::after {
@@ -500,17 +508,55 @@ tr:hover {
 /* Responsive */
 
 @media (max-width: 768px) {
-    .container {
+    .container,
+    .container--wide {
         padding: 0 16px;
+        max-width: 100%;
+    }
+
+    .header__title {
+        font-size: 1.6rem;
     }
 
     .form-row {
         grid-template-columns: 1fr;
     }
 
+    .card-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .admin-nav {
+        flex-wrap: wrap;
+    }
+
+    .admin-nav a {
+        font-size: 0.8rem;
+        padding: 6px 10px;
+    }
+
     .hours-row {
-        grid-template-columns: 80px auto 1fr 1fr;
-        gap: 8px;
+        grid-template-columns: 70px auto 1fr 1fr;
+        gap: 6px;
+        font-size: 0.85rem;
+    }
+
+    .hours-row input[type="time"] {
+        padding: 6px 4px;
+        font-size: 0.85rem;
+    }
+
+    table {
+        font-size: 0.8rem;
+    }
+
+    th, td {
+        padding: 8px 6px;
+    }
+
+    .btn--small {
+        padding: 4px 8px;
+        font-size: 0.75rem;
     }
 
     .slots-grid {
