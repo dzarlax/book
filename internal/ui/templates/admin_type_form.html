@@ -23,8 +23,14 @@
             <textarea id="description" name="description" placeholder="What is this meeting about?">{{.Meeting.Description}}</textarea>
         </div>
         <div class="form-group">
-            <label for="calendar_id">Calendar ID</label>
-            <input type="text" id="calendar_id" name="calendar_id" value="{{.Meeting.CalendarID}}" placeholder="e.g. google:primary, microsoft:calendar-id">
+            <label for="calendar_id">Calendar</label>
+            <select id="calendar_id" name="calendar_id">
+                <option value="">— No calendar —</option>
+                {{$selected := .Meeting.CalendarID}}
+                {{range .Calendars}}
+                <option value="{{.ID}}" {{if eq .ID $selected}}selected{{end}}>{{.Name}} ({{.ID}})</option>
+                {{end}}
+            </select>
         </div>
         <div class="form-row">
             <div class="form-group">

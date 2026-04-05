@@ -17,6 +17,13 @@ type Client struct {
 	httpClient *http.Client
 }
 
+type Calendar struct {
+	ID       string `json:"id"`
+	Provider string `json:"provider"`
+	Name     string `json:"name"`
+	Primary  bool   `json:"primary,omitempty"`
+}
+
 type Event struct {
 	ID          string     `json:"id"`
 	CalendarID  string     `json:"calendar_id"`
@@ -55,6 +62,15 @@ func New(baseURL, apiKey string) *Client {
 // Enabled returns true if the calendar API is configured.
 func (c *Client) Enabled() bool {
 	return c.baseURL != ""
+}
+
+// ListCalendars returns all available calendars.
+func (c *Client) ListCalendars(ctx context.Context) ([]Calendar, error) {
+	var cals []Calendar
+	if err := c.get(ctx, "/api/calendars", &cals); err != nil {
+		return nil, err
+	}
+	return cals, nil
 }
 
 // GetEvents returns events from a specific calendar for the given time range.

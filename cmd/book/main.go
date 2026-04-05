@@ -57,7 +57,7 @@ func main() {
 	}
 
 	publicH := handler.NewPublicHandler(store, cal, tmpl, tz)
-	adminH := handler.NewAdminHandler(store, tmpl, tz)
+	adminH := handler.NewAdminHandler(store, cal, tmpl, tz)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)

@@ -2,24 +2,48 @@ package handler
 
 import (
 	"html/template"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/dzarlax/book/internal/calendarapi"
 	"github.com/dzarlax/book/internal/model"
 	"github.com/dzarlax/book/internal/storage"
 )
 
 type AdminHandler struct {
 	store    *storage.Storage
+	cal      *calendarapi.Client
 	tmpl     *template.Template
 	timezone *time.Location
 }
 
-func NewAdminHandler(store *storage.Storage, tmpl *template.Template, tz *time.Location) *AdminHandler {
-	return &AdminHandler{store: store, tmpl: tmpl, timezone: tz}
+func NewAdminHandler(store *storage.Storage, cal *calendarapi.Client, tmpl *template.Template, tz *time.Location) *AdminHandler {
+	return &AdminHandler{store: store, cal: cal, tmpl: tmpl, timezone: tz}
+}
+
+type calendarOption struct {
+	ID   string
+	Name string
+}
+
+func (h *AdminHandler) fetchCalendars(r *http.Request) []calendarOption {
+	if !h.cal.Enabled() {
+		return nil
+	}
+	cals, err := h.cal.ListCalendars(r.Context())
+	if err != nil {
+		log.Printf("fetch calendars: %v", err)
+		return nil
+	}
+	opts := make([]calendarOption, len(cals))
+	for i, c := range cals {
+		opts[i] = calendarOption{ID: c.ID, Name: c.Name}
+	}
+	return opts
 }
 
 func (h *AdminHandler) Routes() chi.Router {
@@ -68,6 +92,7 @@ func (h *AdminHandler) newTypeForm(w http.ResponseWriter, r *http.Request) {
 		"ContainerClass": " container--wide",
 		"Meeting":        &model.MeetingType{DurationMin: 30, BufferMin: 10, MaxPerDay: 8, Active: true},
 		"IsNew":          true,
+		"Calendars":      h.fetchCalendars(r),
 	})
 }
 
@@ -95,7 +120,7 @@ func (h *AdminHandler) editTypeForm(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	h.render(w, "admin_type_form.html", map[string]any{"Title": "Edit — Admin", "ContainerClass": " container--wide", "Meeting": mt, "IsNew": false})
+	h.render(w, "admin_type_form.html", map[string]any{"Title": "Edit — Admin", "ContainerClass": " container--wide", "Meeting": mt, "IsNew": false, "Calendars": h.fetchCalendars(r)})
 }
 
 func (h *AdminHandler) updateType(w http.ResponseWriter, r *http.Request) {
