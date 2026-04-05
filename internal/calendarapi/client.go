@@ -31,6 +31,7 @@ type Event struct {
 	Description string     `json:"description,omitempty"`
 	Start       time.Time  `json:"start"`
 	End         time.Time  `json:"end"`
+	AllDay      bool       `json:"all_day,omitempty"`
 	Attendees   []Attendee `json:"attendees,omitempty"`
 }
 

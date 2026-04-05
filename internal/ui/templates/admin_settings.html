@@ -1,0 +1,27 @@
+{{define "admin_settings.html"}}
+{{template "head" .}}
+
+<header class="header">
+    <h1 class="header__title">Settings</h1>
+    <p class="header__subtitle">Configure booking behavior</p>
+</header>
+
+{{template "admin_nav" "settings"}}
+
+<div class="card" style="max-width:600px">
+    <form hx-post="/admin/settings">
+        <div class="form-group">
+            <label for="block_allday_keywords">Block day by all-day event keywords</label>
+            <textarea id="block_allday_keywords" name="block_allday_keywords"
+                      rows="5"
+                      placeholder="One keyword per line, e.g.:&#10;public holiday&#10;day off&#10;vacation">{{.BlockKeywords}}</textarea>
+            <p style="color:var(--text-tertiary);font-size:0.8rem;margin-top:6px">
+                If an all-day calendar event title contains any of these keywords (case-insensitive), the entire day will be blocked for booking.
+            </p>
+        </div>
+        <button type="submit" class="btn btn--primary">Save</button>
+    </form>
+</div>
+
+{{template "foot" .}}
+{{end}}

@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -146,6 +147,14 @@ func (h *PublicHandler) generateSlots(ctx context.Context, mt *model.MeetingType
 		}
 	}
 
+	// Check if any blocking all-day event matches configured keywords
+	blockKeywords := h.getBlockKeywords(ctx)
+	for _, ev := range calEvents {
+		if ev.AllDay && matchesAnyKeyword(ev.Title, blockKeywords) {
+			return nil, nil // whole day blocked
+		}
+	}
+
 	guestLoc, err := time.LoadLocation(guestTZ)
 	if err != nil {
 		guestLoc = h.timezone
@@ -172,9 +181,12 @@ func (h *PublicHandler) generateSlots(ctx context.Context, mt *model.MeetingType
 			}
 		}
 
-		// Check against real calendar events (free/busy)
+		// Check against real calendar events (free/busy), skip all-day events
 		if available {
 			for _, ev := range calEvents {
+				if ev.AllDay {
+					continue
+				}
 				if t.Before(ev.End) && slotEnd.After(ev.Start) {
 					available = false
 					break
@@ -286,4 +298,29 @@ func parseTime(s string) (int, int) {
 	var h, m int
 	fmt.Sscanf(s, "%d:%d", &h, &m)
 	return h, m
+}
+
+func (h *PublicHandler) getBlockKeywords(ctx context.Context) []string {
+	raw, err := h.store.GetSetting(ctx, "block_allday_keywords")
+	if err != nil || raw == "" {
+		return nil
+	}
+	var keywords []string
+	for _, k := range strings.Split(raw, "\n") {
+		k = strings.TrimSpace(k)
+		if k != "" {
+			keywords = append(keywords, strings.ToLower(k))
+		}
+	}
+	return keywords
+}
+
+func matchesAnyKeyword(title string, keywords []string) bool {
+	lower := strings.ToLower(title)
+	for _, kw := range keywords {
+		if strings.Contains(lower, kw) {
+			return true
+		}
+	}
+	return false
 }

@@ -85,6 +85,8 @@ func (h *AdminHandler) Routes() chi.Router {
 	r.Post("/hours", h.saveWorkingHours)
 	r.Get("/bookings", h.listBookings)
 	r.Post("/bookings/{id}/cancel", h.cancelBooking)
+	r.Get("/settings", h.settings)
+	r.Post("/settings", h.saveSettings)
 	return r
 }
 
@@ -229,6 +231,25 @@ func (h *AdminHandler) cancelBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("HX-Refresh", "true")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *AdminHandler) settings(w http.ResponseWriter, r *http.Request) {
+	keywords, _ := h.store.GetSetting(r.Context(), "block_allday_keywords")
+	h.render(w, "admin_settings.html", map[string]any{
+		"Title":          "Settings — Admin",
+		"ContainerClass": " container--wide",
+		"BlockKeywords":  keywords,
+	})
+}
+
+func (h *AdminHandler) saveSettings(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	if err := h.store.SetSetting(r.Context(), "block_allday_keywords", r.FormValue("block_allday_keywords")); err != nil {
+		http.Error(w, "Failed to save", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("HX-Redirect", "/admin/settings")
 	w.WriteHeader(http.StatusOK)
 }
 

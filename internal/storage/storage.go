@@ -212,3 +212,22 @@ func (s *Storage) CountBookingsForDay(ctx context.Context, date time.Time, meeti
 	).Scan(&count)
 	return count, err
 }
+
+// --- Settings ---
+
+func (s *Storage) GetSetting(ctx context.Context, key string) (string, error) {
+	var val string
+	err := s.db.QueryRowContext(ctx, "SELECT value FROM settings WHERE key = $1", key).Scan(&val)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return val, err
+}
+
+func (s *Storage) SetSetting(ctx context.Context, key, value string) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
+		key, value,
+	)
+	return err
+}

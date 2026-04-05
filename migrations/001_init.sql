@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS bookings (
 CREATE INDEX IF NOT EXISTS idx_bookings_time ON bookings (start_time, end_time);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings (status);
 
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+);
+
 -- Default working hours: Mon-Fri 09:00-17:00
 INSERT INTO working_hours (day_of_week, start_time, end_time, active) VALUES
     (1, '09:00', '17:00', true),

@@ -17,21 +17,27 @@
     </div>
 </header>
 
-<div class="date-nav">
-    <label for="date-picker" style="font-weight:500;font-size:0.9rem">Select a date:</label>
-    <input type="date" id="date-picker" name="date" value="{{.Today}}" min="{{.Today}}"
-           hx-get="/{{.Meeting.Slug}}/slots"
-           hx-target="#slots-container"
-           hx-include="[name='tz']"
-           hx-trigger="change"
-           hx-indicator="#slots-loading">
-    <select name="tz" id="guest-tz"
-            hx-get="/{{.Meeting.Slug}}/slots"
-            hx-target="#slots-container"
-            hx-include="[name='date']"
-            hx-trigger="change"
-            style="min-width:200px">
-    </select>
+<div class="booking-controls">
+    <div class="form-row">
+        <div class="form-group">
+            <label for="date-picker">Date</label>
+            <input type="date" id="date-picker" name="date" value="{{.Today}}" min="{{.Today}}"
+                   hx-get="/{{.Meeting.Slug}}/slots"
+                   hx-target="#slots-container"
+                   hx-include="[name='tz']"
+                   hx-trigger="change"
+                   hx-indicator="#slots-loading">
+        </div>
+        <div class="form-group">
+            <label for="guest-tz">Timezone</label>
+            <select name="tz" id="guest-tz"
+                    hx-get="/{{.Meeting.Slug}}/slots"
+                    hx-target="#slots-container"
+                    hx-include="[name='date']"
+                    hx-trigger="change">
+            </select>
+        </div>
+    </div>
     <span class="htmx-indicator" id="slots-loading"><span class="spinner"></span></span>
 </div>
 
@@ -62,9 +68,9 @@
     var detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
     var zones = [
         "Europe/London", "Europe/Berlin", "Europe/Paris", "Europe/Madrid",
-        "Europe/Rome", "Europe/Belgrade", "Europe/Moscow", "Europe/Istanbul",
+        "Europe/Rome", "Europe/Belgrade", "Europe/Sofia", "Europe/Moscow", "Europe/Istanbul",
         "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
-        "America/Sao_Paulo", "Asia/Dubai", "Asia/Kolkata", "Asia/Shanghai",
+        "America/Sao_Paulo", "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore", "Asia/Shanghai",
         "Asia/Tokyo", "Asia/Seoul", "Australia/Sydney", "Pacific/Auckland",
         "UTC"
     ];
