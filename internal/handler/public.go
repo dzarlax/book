@@ -4,23 +4,26 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/dzarlax/book/internal/calendarapi"
 	"github.com/dzarlax/book/internal/model"
 	"github.com/dzarlax/book/internal/storage"
 )
 
 type PublicHandler struct {
 	store    *storage.Storage
+	cal      *calendarapi.Client
 	tmpl     *template.Template
 	timezone *time.Location
 }
 
-func NewPublicHandler(store *storage.Storage, tmpl *template.Template, tz *time.Location) *PublicHandler {
-	return &PublicHandler{store: store, tmpl: tmpl, timezone: tz}
+func NewPublicHandler(store *storage.Storage, cal *calendarapi.Client, tmpl *template.Template, tz *time.Location) *PublicHandler {
+	return &PublicHandler{store: store, cal: cal, tmpl: tmpl, timezone: tz}
 }
 
 func (h *PublicHandler) Routes() chi.Router {
@@ -94,9 +97,7 @@ func (h *PublicHandler) slots(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PublicHandler) generateSlots(ctx context.Context, mt *model.MeetingType, date time.Time, guestTZ string) ([]model.TimeSlot, error) {
-	stdCtx := ctx
-
-	wh, err := h.store.ListWorkingHours(stdCtx)
+	wh, err := h.store.ListWorkingHours(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -120,18 +121,29 @@ func (h *PublicHandler) generateSlots(ctx context.Context, mt *model.MeetingType
 	dayStart := time.Date(date.Year(), date.Month(), date.Day(), startH, startM, 0, 0, h.timezone)
 	dayEnd := time.Date(date.Year(), date.Month(), date.Day(), endH, endM, 0, 0, h.timezone)
 
-	bookings, err := h.store.GetBookingsForDay(stdCtx, dayDate, mt.ID)
+	// Get bookings from our DB
+	bookings, err := h.store.GetBookingsForDay(ctx, dayDate, mt.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	count, err := h.store.CountBookingsForDay(stdCtx, dayDate, mt.ID)
+	count, err := h.store.CountBookingsForDay(ctx, dayDate, mt.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	if mt.MaxPerDay > 0 && count >= mt.MaxPerDay {
 		return nil, nil // daily limit reached
+	}
+
+	// Get calendar events from calendar-mcp (real free/busy)
+	var calEvents []calendarapi.Event
+	if h.cal.Enabled() && mt.CalendarID != "" {
+		calEvents, err = h.cal.GetEvents(ctx, mt.CalendarID, dayStart, dayEnd)
+		if err != nil {
+			log.Printf("calendar api error (non-fatal): %v", err)
+			// Continue without calendar data — bookings DB still works
+		}
 	}
 
 	guestLoc, err := time.LoadLocation(guestTZ)
@@ -151,10 +163,22 @@ func (h *PublicHandler) generateSlots(ctx context.Context, mt *model.MeetingType
 
 		available := true
 		slotEnd := t.Add(duration)
+
+		// Check against bookings in our DB
 		for _, b := range bookings {
 			if t.Before(b.EndTime) && slotEnd.After(b.StartTime) {
 				available = false
 				break
+			}
+		}
+
+		// Check against real calendar events (free/busy)
+		if available {
+			for _, ev := range calEvents {
+				if t.Before(ev.End) && slotEnd.After(ev.Start) {
+					available = false
+					break
+				}
 			}
 		}
 
@@ -203,6 +227,27 @@ func (h *PublicHandler) book(w http.ResponseWriter, r *http.Request) {
 
 	endTime := startTime.Add(time.Duration(mt.DurationMin) * time.Minute)
 
+	// Create calendar event if calendar is configured
+	var calEventID string
+	if h.cal.Enabled() && mt.CalendarID != "" {
+		ev, err := h.cal.CreateEvent(r.Context(), calendarapi.CreateEventRequest{
+			CalendarID:  mt.CalendarID,
+			Title:       fmt.Sprintf("%s with %s", mt.Title, guestName),
+			Start:       startTime.UTC().Format(time.RFC3339),
+			End:         endTime.UTC().Format(time.RFC3339),
+			Description: fmt.Sprintf("Booked via Book\nGuest: %s (%s)", guestName, guestEmail),
+			Attendees: []calendarapi.Attendee{
+				{Email: guestEmail, Name: guestName},
+			},
+		})
+		if err != nil {
+			log.Printf("calendar create error: %v", err)
+			// Don't fail the booking — save it without calendar event
+		} else {
+			calEventID = ev.ID
+		}
+	}
+
 	booking := &model.Booking{
 		MeetingTypeID: mt.ID,
 		GuestName:     guestName,
@@ -211,6 +256,7 @@ func (h *PublicHandler) book(w http.ResponseWriter, r *http.Request) {
 		EndTime:       endTime.UTC(),
 		Timezone:      guestTZ,
 		Status:        "confirmed",
+		CalendarEvent: calEventID,
 	}
 
 	if err := h.store.CreateBooking(r.Context(), booking); err != nil {
@@ -223,7 +269,6 @@ func (h *PublicHandler) book(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PublicHandler) confirmation(w http.ResponseWriter, r *http.Request) {
-	// Simple confirmation page — booking ID in URL
 	h.render(w, "confirmation.html", map[string]any{
 		"ID": chi.URLParam(r, "id"),
 	})
