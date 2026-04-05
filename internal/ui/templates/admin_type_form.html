@@ -42,6 +42,10 @@
                 {{end}}
             </select>
         </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:12px">
+            <input type="checkbox" id="video_call" name="video_call" class="toggle" {{if .Meeting.VideoCall}}checked{{end}}>
+            <label for="video_call" style="margin:0;text-transform:none;font-size:0.9rem">Add video call (Google Meet / Teams)</label>
+        </div>
         <div class="form-row">
             <div class="form-group">
                 <label for="duration_min">Duration (min)</label>

@@ -258,6 +258,7 @@ func (h *PublicHandler) book(w http.ResponseWriter, r *http.Request) {
 			Attendees: []calendarapi.Attendee{
 				{Email: guestEmail, Name: guestName},
 			},
+			VideoCall: mt.VideoCall,
 		})
 		if err != nil {
 			log.Printf("calendar create error: %v", err)

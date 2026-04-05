@@ -49,6 +49,7 @@ type CreateEventRequest struct {
 	End         string     `json:"end"`
 	Description string     `json:"description,omitempty"`
 	Attendees   []Attendee `json:"attendees,omitempty"`
+	VideoCall   bool       `json:"video_call,omitempty"`
 }
 
 func New(baseURL, apiKey string) *Client {

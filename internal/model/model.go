@@ -11,6 +11,7 @@ type MeetingType struct {
 	BufferMin   int       `json:"buffer_min"`
 	MaxPerDay   int       `json:"max_per_day"`
 	CalendarID  string    `json:"calendar_id"` // calendar-mcp calendar ID (e.g. "google:primary")
+	VideoCall   bool      `json:"video_call"`  // auto-create Google Meet / Teams link
 	Active      bool      `json:"active"`
 	CreatedAt   time.Time `json:"created_at"`
 }

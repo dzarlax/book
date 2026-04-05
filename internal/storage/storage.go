@@ -50,7 +50,7 @@ func (s *Storage) Close() error {
 // --- Meeting Types ---
 
 func (s *Storage) ListMeetingTypes(ctx context.Context, onlyActive bool) ([]model.MeetingType, error) {
-	query := "SELECT id, slug, title, description, duration_min, buffer_min, max_per_day, calendar_id, active, created_at FROM meeting_types"
+	query := "SELECT id, slug, title, description, duration_min, buffer_min, max_per_day, calendar_id, video_call, active, created_at FROM meeting_types"
 	if onlyActive {
 		query += " WHERE active = true"
 	}
@@ -65,7 +65,7 @@ func (s *Storage) ListMeetingTypes(ctx context.Context, onlyActive bool) ([]mode
 	var types []model.MeetingType
 	for rows.Next() {
 		var mt model.MeetingType
-		if err := rows.Scan(&mt.ID, &mt.Slug, &mt.Title, &mt.Description, &mt.DurationMin, &mt.BufferMin, &mt.MaxPerDay, &mt.CalendarID, &mt.Active, &mt.CreatedAt); err != nil {
+		if err := rows.Scan(&mt.ID, &mt.Slug, &mt.Title, &mt.Description, &mt.DurationMin, &mt.BufferMin, &mt.MaxPerDay, &mt.CalendarID, &mt.VideoCall, &mt.Active, &mt.CreatedAt); err != nil {
 			return nil, err
 		}
 		types = append(types, mt)
@@ -76,9 +76,9 @@ func (s *Storage) ListMeetingTypes(ctx context.Context, onlyActive bool) ([]mode
 func (s *Storage) GetMeetingType(ctx context.Context, slug string) (*model.MeetingType, error) {
 	var mt model.MeetingType
 	err := s.db.QueryRowContext(ctx,
-		"SELECT id, slug, title, description, duration_min, buffer_min, max_per_day, calendar_id, active, created_at FROM meeting_types WHERE slug = $1",
+		"SELECT id, slug, title, description, duration_min, buffer_min, max_per_day, calendar_id, video_call, active, created_at FROM meeting_types WHERE slug = $1",
 		slug,
-	).Scan(&mt.ID, &mt.Slug, &mt.Title, &mt.Description, &mt.DurationMin, &mt.BufferMin, &mt.MaxPerDay, &mt.CalendarID, &mt.Active, &mt.CreatedAt)
+	).Scan(&mt.ID, &mt.Slug, &mt.Title, &mt.Description, &mt.DurationMin, &mt.BufferMin, &mt.MaxPerDay, &mt.CalendarID, &mt.VideoCall, &mt.Active, &mt.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -90,16 +90,16 @@ func (s *Storage) GetMeetingType(ctx context.Context, slug string) (*model.Meeti
 
 func (s *Storage) CreateMeetingType(ctx context.Context, mt *model.MeetingType) error {
 	return s.db.QueryRowContext(ctx,
-		`INSERT INTO meeting_types (slug, title, description, duration_min, buffer_min, max_per_day, calendar_id, active)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, created_at`,
-		mt.Slug, mt.Title, mt.Description, mt.DurationMin, mt.BufferMin, mt.MaxPerDay, mt.CalendarID, mt.Active,
+		`INSERT INTO meeting_types (slug, title, description, duration_min, buffer_min, max_per_day, calendar_id, video_call, active)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, created_at`,
+		mt.Slug, mt.Title, mt.Description, mt.DurationMin, mt.BufferMin, mt.MaxPerDay, mt.CalendarID, mt.VideoCall, mt.Active,
 	).Scan(&mt.ID, &mt.CreatedAt)
 }
 
 func (s *Storage) UpdateMeetingType(ctx context.Context, mt *model.MeetingType) error {
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE meeting_types SET slug=$1, title=$2, description=$3, duration_min=$4, buffer_min=$5, max_per_day=$6, calendar_id=$7, active=$8 WHERE id=$9`,
-		mt.Slug, mt.Title, mt.Description, mt.DurationMin, mt.BufferMin, mt.MaxPerDay, mt.CalendarID, mt.Active, mt.ID,
+		`UPDATE meeting_types SET slug=$1, title=$2, description=$3, duration_min=$4, buffer_min=$5, max_per_day=$6, calendar_id=$7, video_call=$8, active=$9 WHERE id=$10`,
+		mt.Slug, mt.Title, mt.Description, mt.DurationMin, mt.BufferMin, mt.MaxPerDay, mt.CalendarID, mt.VideoCall, mt.Active, mt.ID,
 	)
 	return err
 }

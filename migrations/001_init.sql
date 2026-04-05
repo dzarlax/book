@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS meeting_types (
     buffer_min INT NOT NULL DEFAULT 10,
     max_per_day INT NOT NULL DEFAULT 8,
     calendar_id TEXT NOT NULL DEFAULT '',
+    video_call BOOLEAN NOT NULL DEFAULT false,
     active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

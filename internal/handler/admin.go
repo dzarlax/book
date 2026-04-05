@@ -288,6 +288,7 @@ func (h *AdminHandler) parseMeetingTypeForm(r *http.Request) *model.MeetingType 
 		BufferMin:   buffer,
 		MaxPerDay:   maxPerDay,
 		CalendarID:  r.FormValue("calendar_id"),
+		VideoCall:   r.FormValue("video_call") == "on",
 		Active:      r.FormValue("active") == "on",
 	}
 }
