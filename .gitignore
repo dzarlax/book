@@ -1,5 +1,5 @@
 # Binaries
-book
+/book
 *.exe
 *.dll
 *.so
