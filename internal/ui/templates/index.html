@@ -1,17 +1,13 @@
-{{template "base" .}}
+{{define "index.html"}}
+{{template "head" .}}
 
-{{define "title"}}Book a Meeting{{end}}
-
-{{define "content"}}
 <header class="header">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
             <h1 class="header__title">Book a Meeting</h1>
             <p class="header__subtitle">Choose a meeting type to get started</p>
         </div>
-        <button class="theme-toggle" onclick="toggleDarkMode()" aria-label="Toggle dark mode">
-            <span id="theme-icon">&#9790;</span>
-        </button>
+        {{template "theme_toggle"}}
     </div>
 </header>
 
@@ -30,4 +26,6 @@
     <p style="color:var(--text-secondary)">No meeting types available yet.</p>
     {{end}}
 </div>
+
+{{template "foot" .}}
 {{end}}

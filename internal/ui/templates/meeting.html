@@ -1,8 +1,6 @@
-{{template "base" .}}
+{{define "meeting.html"}}
+{{template "head" .}}
 
-{{define "title"}}{{.Meeting.Title}} — Book{{end}}
-
-{{define "content"}}
 <header class="header">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
@@ -12,9 +10,7 @@
             <p class="header__subtitle">{{.Meeting.Description}}</p>
             {{end}}
         </div>
-        <button class="theme-toggle" onclick="toggleDarkMode()" aria-label="Toggle dark mode">
-            <span>&#9790;</span>
-        </button>
+        {{template "theme_toggle"}}
     </div>
     <div class="card__meta" style="margin-top:12px">
         <span>{{.Meeting.DurationMin}} min</span>
@@ -54,16 +50,13 @@
         <button type="submit" class="btn btn--primary btn--block">Confirm Booking</button>
     </form>
 </div>
-{{end}}
 
-{{define "scripts"}}
 <script>
-    // Detect guest timezone
     document.getElementById('guest-tz').value = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    // Load initial slots
     document.addEventListener('DOMContentLoaded', function() {
         htmx.trigger(document.getElementById('date-picker'), 'change');
     });
 </script>
+
+{{template "foot" .}}
 {{end}}

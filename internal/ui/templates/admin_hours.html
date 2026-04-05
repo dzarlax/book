@@ -1,9 +1,6 @@
-{{template "base" .}}
+{{define "admin_hours.html"}}
+{{template "head" .}}
 
-{{define "title"}}Working Hours — Admin{{end}}
-{{define "container_class"}} container--wide{{end}}
-
-{{define "content"}}
 <header class="header">
     <h1 class="header__title">Working Hours</h1>
     <p class="header__subtitle">Set your availability for each day of the week</p>
@@ -14,7 +11,6 @@
 <div class="card">
     <form hx-post="/admin/hours">
         <div class="hours-grid">
-            {{$days := list "Sunday" "Monday" "Tuesday" "Wednesday" "Thursday" "Friday" "Saturday"}}
             {{range .Days}}
             <div class="hours-row">
                 <label>{{dayName .DayOfWeek}}</label>
@@ -29,4 +25,6 @@
         </div>
     </form>
 </div>
+
+{{template "foot" .}}
 {{end}}

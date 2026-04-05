@@ -1,8 +1,6 @@
-{{template "base" .}}
+{{define "confirmation.html"}}
+{{template "head" .}}
 
-{{define "title"}}Booking Confirmed — Book{{end}}
-
-{{define "content"}}
 <div class="confirmation">
     <div class="confirmation__icon">&#10003;</div>
     <h1 class="confirmation__title">You're booked!</h1>
@@ -13,4 +11,6 @@
         <a href="/" class="btn btn--secondary">Book another meeting</a>
     </div>
 </div>
+
+{{template "foot" .}}
 {{end}}

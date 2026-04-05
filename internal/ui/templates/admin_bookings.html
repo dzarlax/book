@@ -1,9 +1,6 @@
-{{template "base" .}}
+{{define "admin_bookings.html"}}
+{{template "head" .}}
 
-{{define "title"}}Bookings — Admin{{end}}
-{{define "container_class"}} container--wide{{end}}
-
-{{define "content"}}
 <header class="header">
     <h1 class="header__title">Bookings</h1>
     <p class="header__subtitle">All upcoming and recent bookings</p>
@@ -51,4 +48,6 @@
     </tbody>
 </table>
 </div>
+
+{{template "foot" .}}
 {{end}}

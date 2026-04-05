@@ -1,18 +1,13 @@
-{{template "base" .}}
+{{define "admin_dashboard.html"}}
+{{template "head" .}}
 
-{{define "title"}}Admin — Book{{end}}
-{{define "container_class"}} container--wide{{end}}
-
-{{define "content"}}
 <header class="header">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
             <h1 class="header__title">Admin</h1>
             <p class="header__subtitle">Manage your booking page</p>
         </div>
-        <button class="theme-toggle" onclick="toggleDarkMode()" aria-label="Toggle dark mode">
-            <span>&#9790;</span>
-        </button>
+        {{template "theme_toggle"}}
     </div>
 </header>
 
@@ -30,4 +25,6 @@
         <a href="/admin/bookings" class="btn btn--secondary btn--small">View all</a>
     </div>
 </div>
+
+{{template "foot" .}}
 {{end}}

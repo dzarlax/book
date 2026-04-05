@@ -42,7 +42,7 @@ func (h *PublicHandler) index(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
-	h.render(w, "index.html", map[string]any{"Types": types})
+	h.render(w, "index.html", map[string]any{"Title": "Book a Meeting", "Types": types})
 }
 
 func (h *PublicHandler) meetingPage(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +57,7 @@ func (h *PublicHandler) meetingPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.render(w, "meeting.html", map[string]any{
+		"Title":   mt.Title + " — Book",
 		"Meeting": mt,
 		"Today":   time.Now().In(h.timezone).Format("2006-01-02"),
 	})
@@ -270,7 +271,8 @@ func (h *PublicHandler) book(w http.ResponseWriter, r *http.Request) {
 
 func (h *PublicHandler) confirmation(w http.ResponseWriter, r *http.Request) {
 	h.render(w, "confirmation.html", map[string]any{
-		"ID": chi.URLParam(r, "id"),
+		"Title": "Booking Confirmed — Book",
+		"ID":    chi.URLParam(r, "id"),
 	})
 }
 

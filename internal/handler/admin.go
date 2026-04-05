@@ -46,8 +46,10 @@ func (h *AdminHandler) dashboard(w http.ResponseWriter, r *http.Request) {
 	bookings, _ := h.store.ListBookings(r.Context(), from, to)
 
 	h.render(w, "admin_dashboard.html", map[string]any{
-		"Types":    types,
-		"Bookings": bookings,
+		"Title":          "Admin — Book",
+		"ContainerClass": " container--wide",
+		"Types":          types,
+		"Bookings":       bookings,
 	})
 }
 
@@ -57,13 +59,15 @@ func (h *AdminHandler) listTypes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
-	h.render(w, "admin_types.html", map[string]any{"Types": types})
+	h.render(w, "admin_types.html", map[string]any{"Title": "Meeting Types — Admin", "ContainerClass": " container--wide", "Types": types})
 }
 
 func (h *AdminHandler) newTypeForm(w http.ResponseWriter, r *http.Request) {
 	h.render(w, "admin_type_form.html", map[string]any{
-		"Meeting": &model.MeetingType{DurationMin: 30, BufferMin: 10, MaxPerDay: 8, Active: true},
-		"IsNew":   true,
+		"Title":          "New Meeting Type — Admin",
+		"ContainerClass": " container--wide",
+		"Meeting":        &model.MeetingType{DurationMin: 30, BufferMin: 10, MaxPerDay: 8, Active: true},
+		"IsNew":          true,
 	})
 }
 
@@ -91,7 +95,7 @@ func (h *AdminHandler) editTypeForm(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	h.render(w, "admin_type_form.html", map[string]any{"Meeting": mt, "IsNew": false})
+	h.render(w, "admin_type_form.html", map[string]any{"Title": "Edit — Admin", "ContainerClass": " container--wide", "Meeting": mt, "IsNew": false})
 }
 
 func (h *AdminHandler) updateType(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +133,7 @@ func (h *AdminHandler) workingHours(w http.ResponseWriter, r *http.Request) {
 	for _, wh := range hours {
 		days[wh.DayOfWeek] = wh
 	}
-	h.render(w, "admin_hours.html", map[string]any{"Days": days})
+	h.render(w, "admin_hours.html", map[string]any{"Title": "Working Hours — Admin", "ContainerClass": " container--wide", "Days": days})
 }
 
 func (h *AdminHandler) saveWorkingHours(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +168,7 @@ func (h *AdminHandler) listBookings(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
-	h.render(w, "admin_bookings.html", map[string]any{"Bookings": bookings, "Timezone": h.timezone.String()})
+	h.render(w, "admin_bookings.html", map[string]any{"Title": "Bookings — Admin", "ContainerClass": " container--wide", "Bookings": bookings, "Timezone": h.timezone.String()})
 }
 
 func (h *AdminHandler) cancelBooking(w http.ResponseWriter, r *http.Request) {

@@ -1,9 +1,6 @@
-{{template "base" .}}
+{{define "admin_type_form.html"}}
+{{template "head" .}}
 
-{{define "title"}}{{if .IsNew}}New{{else}}Edit{{end}} Meeting Type — Admin{{end}}
-{{define "container_class"}} container--wide{{end}}
-
-{{define "content"}}
 <header class="header">
     <a href="/admin/types" style="text-decoration:none;color:var(--text-tertiary);font-size:0.85rem">&larr; Back to types</a>
     <h1 class="header__title">{{if .IsNew}}New Meeting Type{{else}}Edit: {{.Meeting.Title}}{{end}}</h1>
@@ -55,4 +52,6 @@
         </div>
     </form>
 </div>
+
+{{template "foot" .}}
 {{end}}

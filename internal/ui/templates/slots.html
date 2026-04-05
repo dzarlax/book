@@ -1,3 +1,4 @@
+{{define "slots.html"}}
 {{if .Slots}}
 <div class="slots-grid">
     {{range .Slots}}
@@ -13,7 +14,7 @@
 
 <script>
 function selectSlot(el, startTime) {
-    document.querySelectorAll('.slot--selected').forEach(s => s.classList.remove('slot--selected'));
+    document.querySelectorAll('.slot--selected').forEach(function(s) { s.classList.remove('slot--selected'); });
     el.classList.add('slot--selected');
     document.getElementById('selected-start').value = startTime;
     document.getElementById('booking-form').style.display = 'block';
@@ -22,4 +23,5 @@ function selectSlot(el, startTime) {
 </script>
 {{else}}
 <p style="color:var(--text-tertiary);padding:24px 0">No available slots for this date.</p>
+{{end}}
 {{end}}

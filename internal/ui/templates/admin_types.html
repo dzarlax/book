@@ -1,9 +1,6 @@
-{{template "base" .}}
+{{define "admin_types.html"}}
+{{template "head" .}}
 
-{{define "title"}}Meeting Types — Admin{{end}}
-{{define "container_class"}} container--wide{{end}}
-
-{{define "content"}}
 <header class="header">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
@@ -58,4 +55,6 @@
     </tbody>
 </table>
 </div>
+
+{{template "foot" .}}
 {{end}}
