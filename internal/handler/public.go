@@ -137,13 +137,12 @@ func (h *PublicHandler) generateSlots(ctx context.Context, mt *model.MeetingType
 		return nil, nil // daily limit reached
 	}
 
-	// Get calendar events from calendar-mcp (real free/busy)
+	// Get calendar events from ALL calendars (real free/busy)
 	var calEvents []calendarapi.Event
-	if h.cal.Enabled() && mt.CalendarID != "" {
-		calEvents, err = h.cal.GetEvents(ctx, mt.CalendarID, dayStart, dayEnd)
+	if h.cal.Enabled() {
+		calEvents, err = h.cal.GetEvents(ctx, "", dayStart, dayEnd)
 		if err != nil {
 			log.Printf("calendar api error (non-fatal): %v", err)
-			// Continue without calendar data — bookings DB still works
 		}
 	}
 
