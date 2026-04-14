@@ -36,9 +36,9 @@
             <td>{{.GuestEmail}}</td>
             <td>
                 {{if eq .Status "confirmed"}}
-                <span class="badge badge--confirmed">Confirmed</span>
+                <span class="badge badge--success">Confirmed</span>
                 {{else}}
-                <span class="badge badge--cancelled">Cancelled</span>
+                <span class="badge badge--danger">Cancelled</span>
                 {{end}}
             </td>
             <td style="text-align:right">
