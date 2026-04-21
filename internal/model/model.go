@@ -24,6 +24,15 @@ type WorkingHours struct {
 	Active    bool   `json:"active"`
 }
 
+type MeetingTypeHours struct {
+	ID            int64  `json:"id"`
+	MeetingTypeID int64  `json:"meeting_type_id"`
+	DayOfWeek     int    `json:"day_of_week"`
+	StartTime     string `json:"start_time"`
+	EndTime       string `json:"end_time"`
+	Active        bool   `json:"active"`
+}
+
 type Booking struct {
 	ID               int64     `json:"id"`
 	MeetingTypeID    int64     `json:"meeting_type_id"`

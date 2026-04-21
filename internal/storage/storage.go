@@ -32,13 +32,14 @@ func New(databaseURL string) (*Storage, error) {
 }
 
 func (s *Storage) Migrate(migrationsDir string) error {
-	data, err := os.ReadFile(migrationsDir + "/001_init.sql")
-	if err != nil {
-		return fmt.Errorf("read migration: %w", err)
-	}
-	_, err = s.db.Exec(string(data))
-	if err != nil {
-		return fmt.Errorf("exec migration: %w", err)
+	for _, f := range []string{"001_init.sql", "002_meeting_type_hours.sql"} {
+		data, err := os.ReadFile(migrationsDir + "/" + f)
+		if err != nil {
+			return fmt.Errorf("read migration %s: %w", f, err)
+		}
+		if _, err := s.db.Exec(string(data)); err != nil {
+			return fmt.Errorf("exec migration %s: %w", f, err)
+		}
 	}
 	return nil
 }
@@ -235,6 +236,39 @@ func (s *Storage) CountBookingsForDay(ctx context.Context, date time.Time, meeti
 		meetingTypeID, startOfDay, endOfDay,
 	).Scan(&count)
 	return count, err
+}
+
+// --- Meeting Type Hours ---
+
+func (s *Storage) ListMeetingTypeHours(ctx context.Context, meetingTypeID int64) ([]model.MeetingTypeHours, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT id, meeting_type_id, day_of_week, start_time, end_time, active FROM meeting_type_hours WHERE meeting_type_id = $1 ORDER BY day_of_week",
+		meetingTypeID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var hours []model.MeetingTypeHours
+	for rows.Next() {
+		var h model.MeetingTypeHours
+		if err := rows.Scan(&h.ID, &h.MeetingTypeID, &h.DayOfWeek, &h.StartTime, &h.EndTime, &h.Active); err != nil {
+			return nil, err
+		}
+		hours = append(hours, h)
+	}
+	return hours, rows.Err()
+}
+
+func (s *Storage) UpsertMeetingTypeHours(ctx context.Context, h *model.MeetingTypeHours) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO meeting_type_hours (meeting_type_id, day_of_week, start_time, end_time, active)
+		 VALUES ($1, $2, $3, $4, $5)
+		 ON CONFLICT (meeting_type_id, day_of_week) DO UPDATE SET start_time=$3, end_time=$4, active=$5`,
+		h.MeetingTypeID, h.DayOfWeek, h.StartTime, h.EndTime, h.Active,
+	)
+	return err
 }
 
 // --- Settings ---

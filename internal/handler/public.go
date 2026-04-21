@@ -99,27 +99,17 @@ func (h *PublicHandler) slots(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PublicHandler) generateSlots(ctx context.Context, mt *model.MeetingType, date time.Time, guestTZ string) ([]model.TimeSlot, error) {
-	wh, err := h.store.ListWorkingHours(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	dayDate := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, h.timezone)
 	weekday := int(dayDate.Weekday())
 
-	var todayWH *model.WorkingHours
-	for _, w := range wh {
-		if w.DayOfWeek == weekday && w.Active {
-			todayWH = &w
-			break
-		}
-	}
-	if todayWH == nil {
+	// Prefer per-type hours, fall back to global working hours
+	startTime, endTime, found := h.resolveHours(ctx, mt.ID, weekday)
+	if !found {
 		return nil, nil // not a working day
 	}
 
-	startH, startM := parseTime(todayWH.StartTime)
-	endH, endM := parseTime(todayWH.EndTime)
+	startH, startM := parseTime(startTime)
+	endH, endM := parseTime(endTime)
 	dayStart := time.Date(date.Year(), date.Month(), date.Day(), startH, startM, 0, 0, h.timezone)
 	dayEnd := time.Date(date.Year(), date.Month(), date.Day(), endH, endM, 0, 0, h.timezone)
 
@@ -138,12 +128,15 @@ func (h *PublicHandler) generateSlots(ctx context.Context, mt *model.MeetingType
 		return nil, nil // daily limit reached
 	}
 
-	// Get calendar events from ALL calendars (real free/busy)
+	// Get calendar events (real free/busy)
 	var calEvents []calendarapi.Event
 	if h.cal.Enabled() {
 		calEvents, err = h.cal.GetEvents(ctx, "", dayStart, dayEnd)
 		if err != nil {
 			log.Printf("calendar api error (non-fatal): %v", err)
+		}
+		if blockCals := h.getBlockCalendars(ctx); len(blockCals) > 0 {
+			calEvents = filterByCalendars(calEvents, blockCals)
 		}
 	}
 
@@ -308,6 +301,34 @@ func parseTime(s string) (int, int) {
 	return h, m
 }
 
+func (h *PublicHandler) resolveHours(ctx context.Context, meetingTypeID int64, weekday int) (start, end string, found bool) {
+	// Check per-type hours first
+	mtHours, err := h.store.ListMeetingTypeHours(ctx, meetingTypeID)
+	if err == nil {
+		for _, h := range mtHours {
+			if h.DayOfWeek == weekday && h.Active {
+				return h.StartTime, h.EndTime, true
+			}
+		}
+		// If custom hours exist but this day is not active, day is unavailable
+		if len(mtHours) > 0 {
+			return "", "", false
+		}
+	}
+
+	// Fall back to global working hours
+	wh, err := h.store.ListWorkingHours(ctx)
+	if err != nil {
+		return "", "", false
+	}
+	for _, w := range wh {
+		if w.DayOfWeek == weekday && w.Active {
+			return w.StartTime, w.EndTime, true
+		}
+	}
+	return "", "", false
+}
+
 func (h *PublicHandler) getBlockKeywords(ctx context.Context) []string {
 	raw, err := h.store.GetSetting(ctx, "block_allday_keywords")
 	if err != nil || raw == "" {
@@ -331,4 +352,33 @@ func matchesAnyKeyword(title string, keywords []string) bool {
 		}
 	}
 	return false
+}
+
+func (h *PublicHandler) getBlockCalendars(ctx context.Context) []string {
+	raw, err := h.store.GetSetting(ctx, "block_calendars")
+	if err != nil || raw == "" {
+		return nil
+	}
+	var ids []string
+	for _, id := range strings.Split(raw, "\n") {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+func filterByCalendars(events []calendarapi.Event, calIDs []string) []calendarapi.Event {
+	allowed := make(map[string]bool, len(calIDs))
+	for _, id := range calIDs {
+		allowed[id] = true
+	}
+	filtered := events[:0]
+	for _, ev := range events {
+		if allowed[ev.CalendarID] {
+			filtered = append(filtered, ev)
+		}
+	}
+	return filtered
 }

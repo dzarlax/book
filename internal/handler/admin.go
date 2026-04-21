@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -36,6 +37,14 @@ type calendarOption struct {
 }
 
 func (h *AdminHandler) fetchCalendarGroups(r *http.Request) []calendarGroup {
+	return h.fetchCalendarGroupsFiltered(r, true)
+}
+
+func (h *AdminHandler) fetchAllCalendarGroups(r *http.Request) []calendarGroup {
+	return h.fetchCalendarGroupsFiltered(r, false)
+}
+
+func (h *AdminHandler) fetchCalendarGroupsFiltered(r *http.Request, writeableOnly bool) []calendarGroup {
 	if !h.cal.Enabled() {
 		return nil
 	}
@@ -47,7 +56,7 @@ func (h *AdminHandler) fetchCalendarGroups(r *http.Request) []calendarGroup {
 	grouped := make(map[string][]calendarOption)
 	var order []string
 	for _, c := range cals {
-		if c.ReadOnly {
+		if writeableOnly && c.ReadOnly {
 			continue
 		}
 		if _, ok := grouped[c.Provider]; !ok {
@@ -84,6 +93,7 @@ func (h *AdminHandler) Routes() chi.Router {
 	r.Get("/types/{id}/edit", h.editTypeForm)
 	r.Post("/types/{id}", h.updateType)
 	r.Delete("/types/{id}", h.deleteType)
+	r.Post("/types/{id}/hours", h.saveMeetingTypeHours)
 	r.Get("/hours", h.workingHours)
 	r.Post("/hours", h.saveWorkingHours)
 	r.Get("/bookings", h.listBookings)
@@ -157,7 +167,56 @@ func (h *AdminHandler) editTypeForm(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	h.render(w, "admin_type_form.html", map[string]any{"Title": "Edit — Admin", "ContainerClass": " container--wide", "Meeting": mt, "IsNew": false, "Calendars": h.fetchCalendarGroups(r)})
+	h.render(w, "admin_type_form.html", map[string]any{
+		"Title":          "Edit — Admin",
+		"ContainerClass": " container--wide",
+		"Meeting":        mt,
+		"IsNew":          false,
+		"Calendars":      h.fetchCalendarGroups(r),
+		"CustomDays":     h.buildCustomDays(r, mt.ID),
+	})
+}
+
+func (h *AdminHandler) buildCustomDays(r *http.Request, meetingTypeID int64) []model.MeetingTypeHours {
+	saved, _ := h.store.ListMeetingTypeHours(r.Context(), meetingTypeID)
+	byDay := make(map[int]model.MeetingTypeHours, 7)
+	for i := 0; i < 7; i++ {
+		byDay[i] = model.MeetingTypeHours{MeetingTypeID: meetingTypeID, DayOfWeek: i, StartTime: "09:00", EndTime: "17:00"}
+	}
+	for _, h := range saved {
+		byDay[h.DayOfWeek] = h
+	}
+	order := []int{1, 2, 3, 4, 5, 6, 0}
+	days := make([]model.MeetingTypeHours, 7)
+	for i, d := range order {
+		days[i] = byDay[d]
+	}
+	return days
+}
+
+func (h *AdminHandler) saveMeetingTypeHours(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	for i := 0; i < 7; i++ {
+		prefix := strconv.Itoa(i)
+		active := r.FormValue("active_"+prefix) == "on"
+		mth := &model.MeetingTypeHours{
+			MeetingTypeID: id,
+			DayOfWeek:     i,
+			StartTime:     r.FormValue("start_" + prefix),
+			EndTime:       r.FormValue("end_" + prefix),
+			Active:        active,
+		}
+		if err := h.store.UpsertMeetingTypeHours(r.Context(), mth); err != nil {
+			http.Error(w, "Failed to save", http.StatusInternalServerError)
+			return
+		}
+	}
+	w.Header().Set("HX-Redirect", "/admin/types/"+strconv.FormatInt(id, 10)+"/edit")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *AdminHandler) updateType(w http.ResponseWriter, r *http.Request) {
@@ -266,16 +325,31 @@ func (h *AdminHandler) cancelBooking(w http.ResponseWriter, r *http.Request) {
 
 func (h *AdminHandler) settings(w http.ResponseWriter, r *http.Request) {
 	keywords, _ := h.store.GetSetting(r.Context(), "block_allday_keywords")
+	blockCalsRaw, _ := h.store.GetSetting(r.Context(), "block_calendars")
+	selectedCals := make(map[string]bool)
+	for _, id := range strings.Split(blockCalsRaw, "\n") {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			selectedCals[id] = true
+		}
+	}
 	h.render(w, "admin_settings.html", map[string]any{
 		"Title":          "Settings — Admin",
 		"ContainerClass": " container--wide",
 		"BlockKeywords":  keywords,
+		"Calendars":      h.fetchAllCalendarGroups(r),
+		"SelectedCals":   selectedCals,
 	})
 }
 
 func (h *AdminHandler) saveSettings(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	if err := h.store.SetSetting(r.Context(), "block_allday_keywords", r.FormValue("block_allday_keywords")); err != nil {
+		http.Error(w, "Failed to save", http.StatusInternalServerError)
+		return
+	}
+	blockCals := strings.Join(r.Form["block_calendars"], "\n")
+	if err := h.store.SetSetting(r.Context(), "block_calendars", blockCals); err != nil {
 		http.Error(w, "Failed to save", http.StatusInternalServerError)
 		return
 	}

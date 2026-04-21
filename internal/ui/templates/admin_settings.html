@@ -24,6 +24,33 @@
                 If an all-day calendar event title contains any of these keywords (case-insensitive), the entire day will be blocked for booking.
             </p>
         </div>
+
+        <div class="form-group">
+            <label>Calendars used for blocking</label>
+            {{if .Calendars}}
+                <p style="color:var(--text-tertiary);font-size:0.8rem;margin-bottom:8px">
+                    Select which calendars are checked for busy slots. If none are selected, all calendars are used.
+                </p>
+                {{range .Calendars}}
+                <div style="margin-bottom:8px">
+                    <p style="font-size:0.75rem;font-weight:600;text-transform:uppercase;color:var(--text-tertiary);margin:0 0 4px">{{.Provider}}</p>
+                    {{range .Calendars}}
+                    <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer">
+                        <input type="checkbox" name="block_calendars" value="{{.ID}}"
+                               {{if index $.SelectedCals .ID}}checked{{end}}>
+                        <span>{{.Name}}</span>
+                        <span style="color:var(--text-tertiary);font-size:0.75rem">({{.ID}})</span>
+                    </label>
+                    {{end}}
+                </div>
+                {{end}}
+            {{else}}
+                <p style="color:var(--text-tertiary);font-size:0.85rem">
+                    No calendar integration configured. Set <code>CALENDAR_API_URL</code> to enable calendar selection.
+                </p>
+            {{end}}
+        </div>
+
         <button type="submit" class="btn btn--primary">Save</button>
     </form>
 </div>
