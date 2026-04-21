@@ -28,18 +28,20 @@
         <div class="form-group">
             <label>Calendars used for blocking</label>
             {{if .Calendars}}
-                <p style="color:var(--text-tertiary);font-size:0.8rem;margin-bottom:8px">
+                <p style="color:var(--text-tertiary);font-size:0.8rem;margin-bottom:12px">
                     Select which calendars are checked for busy slots. If none are selected, all calendars are used.
                 </p>
                 {{range .Calendars}}
                 <div style="margin-bottom:12px">
                     <p style="font-size:0.75rem;font-weight:600;text-transform:uppercase;color:var(--text-tertiary);margin:0 0 6px">{{.Provider}}</p>
                     {{range .Calendars}}
-                    <label style="display:flex;align-items:center;gap:10px;padding:5px 0;cursor:pointer">
+                    <div style="display:flex;align-items:center;gap:10px;padding:5px 0;cursor:pointer"
+                         onclick="this.querySelector('input').click()">
                         <input type="checkbox" name="block_calendars" value="{{.ID}}"
-                               {{if index $.SelectedCals .ID}}checked{{end}}>
-                        <span>{{.Name}}</span>
-                    </label>
+                               {{if index $.SelectedCals .ID}}checked{{end}}
+                               onclick="event.stopPropagation()">
+                        <span style="font-size:0.9rem">{{.Name}}</span>
+                    </div>
                     {{end}}
                 </div>
                 {{end}}
