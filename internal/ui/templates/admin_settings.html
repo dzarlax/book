@@ -32,14 +32,13 @@
                     Select which calendars are checked for busy slots. If none are selected, all calendars are used.
                 </p>
                 {{range .Calendars}}
-                <div style="margin-bottom:8px">
-                    <p style="font-size:0.75rem;font-weight:600;text-transform:uppercase;color:var(--text-tertiary);margin:0 0 4px">{{.Provider}}</p>
+                <div style="margin-bottom:12px">
+                    <p style="font-size:0.75rem;font-weight:600;text-transform:uppercase;color:var(--text-tertiary);margin:0 0 6px">{{.Provider}}</p>
                     {{range .Calendars}}
-                    <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer">
+                    <label style="display:flex;align-items:center;gap:10px;padding:5px 0;cursor:pointer">
                         <input type="checkbox" name="block_calendars" value="{{.ID}}"
                                {{if index $.SelectedCals .ID}}checked{{end}}>
                         <span>{{.Name}}</span>
-                        <span style="color:var(--text-tertiary);font-size:0.75rem">({{.ID}})</span>
                     </label>
                     {{end}}
                 </div>
