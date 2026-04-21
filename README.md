@@ -9,6 +9,8 @@ Self-hosted meeting booking system (Calendly alternative).
 - **Calendar integration** — real-time free/busy via [calendar-mcp](https://github.com/Dzarlax-AI/calendar-mcp) REST API
 - **Video calls** — auto-create Google Meet or MS Teams links per meeting type
 - **Timezone support** — auto-detected with manual override
+- **Per-type availability** — each meeting type can override global working hours with its own schedule
+- **Calendar blocking filter** — choose which calendars are checked for busy slots; subscribed (read-only) calendars are labeled
 - **All-day event filtering** — configurable keywords block entire days (e.g. "public holiday")
 - **Rate limiting** — Traefik middleware on public routes
 
