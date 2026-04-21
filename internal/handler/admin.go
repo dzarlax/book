@@ -32,8 +32,9 @@ type calendarGroup struct {
 }
 
 type calendarOption struct {
-	ID   string
-	Name string
+	ID       string
+	Name     string
+	ReadOnly bool
 }
 
 func (h *AdminHandler) fetchCalendarGroups(r *http.Request) []calendarGroup {
@@ -62,7 +63,7 @@ func (h *AdminHandler) fetchCalendarGroupsFiltered(r *http.Request, writeableOnl
 		if _, ok := grouped[c.Provider]; !ok {
 			order = append(order, c.Provider)
 		}
-		grouped[c.Provider] = append(grouped[c.Provider], calendarOption{ID: c.ID, Name: c.Name})
+		grouped[c.Provider] = append(grouped[c.Provider], calendarOption{ID: c.ID, Name: c.Name, ReadOnly: c.ReadOnly})
 	}
 	groups := make([]calendarGroup, len(order))
 	for i, p := range order {

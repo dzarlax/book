@@ -157,6 +157,27 @@
     font-size: var(--text-sm);
 }
 
+/* ── Check row (override: .form-group input {width:100%} breaks checkboxes) ── */
+
+.check-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    cursor: pointer;
+    font-size: var(--text-base);
+}
+
+.check-row input[type="checkbox"],
+.check-row input[type="radio"] {
+    width: auto;
+    min-width: auto;
+    max-width: none;
+    flex-shrink: 0;
+    cursor: pointer;
+    padding: 0;
+}
+
 /* ── HTMX ── */
 
 .htmx-indicator {

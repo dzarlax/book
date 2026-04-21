@@ -35,13 +35,12 @@
                 <div style="margin-bottom:12px">
                     <p style="font-size:0.75rem;font-weight:600;text-transform:uppercase;color:var(--text-tertiary);margin:0 0 6px">{{.Provider}}</p>
                     {{range .Calendars}}
-                    <div style="display:flex;align-items:center;gap:10px;padding:5px 0;cursor:pointer"
-                         onclick="this.querySelector('input').click()">
+                    <label class="check-row">
                         <input type="checkbox" name="block_calendars" value="{{.ID}}"
-                               {{if index $.SelectedCals .ID}}checked{{end}}
-                               onclick="event.stopPropagation()">
-                        <span style="font-size:0.9rem">{{.Name}}</span>
-                    </div>
+                               {{if index $.SelectedCals .ID}}checked{{end}}>
+                        <span>{{.Name}}</span>
+                        {{if .ReadOnly}}<span class="badge badge--neutral" style="font-size:0.7rem;padding:1px 6px">subscribed</span>{{end}}
+                    </label>
                     {{end}}
                 </div>
                 {{end}}
