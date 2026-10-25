@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'security/2026-10-25-remediation']
     paths-ignore:
       - '**.md'
       - '.env.example'
@@ -22,7 +22,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.27.3'
           cache: true
 
       - name: Test
@@ -38,7 +38,7 @@ jobs:
     name: Docker Build & Push
     needs: build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/security/2026-10-25-remediation')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     permissions:
       contents: read
       packages: write
@@ -64,7 +64,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/book
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=,format=short
 
       - name: Build and push
