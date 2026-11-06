@@ -16,6 +16,7 @@
 
 <div class="card" style="max-width:600px">
     <form {{if .IsNew}}hx-post="/admin/types"{{else}}hx-post="/admin/types/{{.Meeting.ID}}"{{end}}>
+        {{if not .IsNew}}<input type="hidden" name="original_calendar_id" value="{{.Meeting.CalendarID}}">{{end}}
         <div class="form-group">
             <label for="title">Title</label>
             <input type="text" id="title" name="title" value="{{.Meeting.Title}}" required placeholder="e.g. Consultation">
@@ -30,8 +31,11 @@
         </div>
         <div class="form-group">
             <label for="calendar_id">Calendar</label>
+ {{range .CatalogWarnings}}<p role="alert" class="card__meta">{{.}}</p>{{end}}
+ <p class="card__meta">Booking targets currently require a verified Google create capability. Other providers may still be selected for availability blocking.</p>
             <select id="calendar_id" name="calendar_id">
                 <option value="">— No calendar —</option>
+ {{if .TargetUnavailable}}<option value="{{.Meeting.CalendarID}}" selected>Current calendar unavailable — retain existing selection</option>{{end}}
                 {{$selected := .Meeting.CalendarID}}
                 {{range .Calendars}}
                 <optgroup label="{{.Provider}}">

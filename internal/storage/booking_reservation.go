@@ -33,13 +33,23 @@ func (s *Storage) ReserveBooking(ctx context.Context, b *model.Booking, hostTZ *
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(1128353611, 1112493907)`); err != nil {
 		return err
 	}
+	if b.ExpectedSettings == nil {
+		return ErrBookingStateConflict
+	}
+	currentSettings, err := readBookingSettings(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if currentSettings != *b.ExpectedSettings {
+		return ErrBookingStateConflict
+	}
 	var duration, buffer, maximum int
 	var active bool
 	var calendarID string
 	if err = tx.QueryRowContext(ctx, `SELECT duration_min, buffer_min, max_per_day, active, calendar_id FROM meeting_types WHERE id = $1 FOR SHARE`, b.MeetingTypeID).Scan(&duration, &buffer, &maximum, &active, &calendarID); err != nil {
 		return err
 	}
-	if !active || calendarID == "" || calendarID != b.CalendarIDSnapshot || duration <= 0 || buffer < 0 || b.EndTime.Sub(b.StartTime) != time.Duration(duration)*time.Minute {
+	if !active || calendarID == "" || calendarID != b.CalendarIDSnapshot || duration <= 0 || buffer < 0 || buffer != b.ExpectedBufferMin || b.EndTime.Sub(b.StartTime) != time.Duration(duration)*time.Minute {
 		return ErrBookingStateConflict
 	}
 	local := b.StartTime.In(hostTZ)

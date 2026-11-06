@@ -34,6 +34,10 @@ func TestSyntheticReservationRace(t *testing.T) {
 		t.Fatalf("repeated migration: %v", err)
 	}
 	ctx := context.Background()
+	settings, err := s.BookingSettings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, slug := range []string{"test-one", "test-two"} {
 		mt := &model.MeetingType{Slug: slug, Title: slug, DurationMin: 60, BufferMin: 10, Active: true, CalendarID: "google:original"}
 		if err := s.CreateMeetingType(ctx, mt); err != nil {
@@ -45,7 +49,7 @@ func TestSyntheticReservationRace(t *testing.T) {
 		t.Fatalf("meeting types: %v", err)
 	}
 	start := time.Date(2027, 3, 28, 0, 15, 0, 0, time.UTC)
-	bookings := []*model.Booking{{MeetingTypeID: types[0].ID, StartTime: start, EndTime: start.Add(time.Hour), CalendarIDSnapshot: "google:original"}, {MeetingTypeID: types[1].ID, StartTime: start, EndTime: start.Add(time.Hour), CalendarIDSnapshot: "google:original"}}
+	bookings := []*model.Booking{{MeetingTypeID: types[0].ID, StartTime: start, EndTime: start.Add(time.Hour), CalendarIDSnapshot: "google:original", ExpectedSettings: &settings, ExpectedBufferMin: 10}, {MeetingTypeID: types[1].ID, StartTime: start, EndTime: start.Add(time.Hour), CalendarIDSnapshot: "google:original", ExpectedSettings: &settings, ExpectedBufferMin: 10}}
 	errs := make([]error, len(bookings))
 	var wg sync.WaitGroup
 	for i := range bookings {
@@ -91,7 +95,7 @@ func TestSyntheticReservationRace(t *testing.T) {
 	if _, err := s.db.ExecContext(ctx, `UPDATE meeting_types SET calendar_id='google:changed' WHERE id=$1`, types[winner].ID); err != nil {
 		t.Fatal(err)
 	}
-	stale := &model.Booking{MeetingTypeID: types[winner].ID, StartTime: start.Add(4 * time.Hour), EndTime: start.Add(5 * time.Hour), CalendarIDSnapshot: "google:original"}
+	stale := &model.Booking{MeetingTypeID: types[winner].ID, StartTime: start.Add(4 * time.Hour), EndTime: start.Add(5 * time.Hour), CalendarIDSnapshot: "google:original", ExpectedSettings: &settings, ExpectedBufferMin: 10}
 	if err := s.ReserveBooking(ctx, stale, time.UTC); !errors.Is(err, ErrBookingStateConflict) {
 		t.Fatalf("stale preflight accepted: %v", err)
 	}
@@ -117,14 +121,14 @@ func TestSyntheticReservationRace(t *testing.T) {
 	if err != nil || len(rows) != 1 || rows[0].Status != "cancelling" {
 		t.Fatalf("cancelling did not block read: %v", err)
 	}
-	tooClose := &model.Booking{MeetingTypeID: types[1-winner].ID, StartTime: start.Add(65 * time.Minute), EndTime: start.Add(125 * time.Minute), CalendarIDSnapshot: "google:original"}
+	tooClose := &model.Booking{MeetingTypeID: types[1-winner].ID, StartTime: start.Add(65 * time.Minute), EndTime: start.Add(125 * time.Minute), CalendarIDSnapshot: "google:original", ExpectedSettings: &settings, ExpectedBufferMin: 10}
 	if err := s.ReserveBooking(ctx, tooClose, time.UTC); !errors.Is(err, ErrBookingConflict) {
 		t.Fatalf("existing buffer not respected: %v", err)
 	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE meeting_types SET max_per_day=1 WHERE id=$1`, types[winner].ID); err != nil {
 		t.Fatal(err)
 	}
-	tooMany := &model.Booking{MeetingTypeID: types[winner].ID, StartTime: start.Add(3 * time.Hour), EndTime: start.Add(4 * time.Hour), CalendarIDSnapshot: "google:changed"}
+	tooMany := &model.Booking{MeetingTypeID: types[winner].ID, StartTime: start.Add(3 * time.Hour), EndTime: start.Add(4 * time.Hour), CalendarIDSnapshot: "google:changed", ExpectedSettings: &settings, ExpectedBufferMin: 10}
 	if err := s.ReserveBooking(ctx, tooMany, time.UTC); !errors.Is(err, ErrBookingLimit) {
 		t.Fatalf("daily limit not respected: %v", err)
 	}

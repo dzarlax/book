@@ -45,11 +45,17 @@ Book requires a calendar-mcp version exposing `GET /api/v2/availability/events`.
 
 Microsoft calendars can participate in availability checks, but Microsoft booking targets currently fail closed before reserving a slot: the legacy create adapter rejects guest attendees without an explicit notification policy. This change does not enable a new invitation policy.
 
-Calendar discovery still uses `GET /api/calendars`. Event creation and deletion retain the existing legacy `POST /api/events` and `DELETE /api/events` contracts; switching availability reads does not change notification or conferencing policies.
+Calendar discovery uses `GET /api/v2/availability/calendars?provider=google|microsoft|apple`. Each response must be complete for that provider and use exact account-scoped IDs. Admin loads the three providers independently, so an unavailable Apple account does not hide available Google calendars. An incomplete admin view is never evidence that a calendar is free. Event creation and deletion retain the existing legacy `POST /api/events` and `DELETE /api/events` contracts; switching availability reads does not change notification or conferencing policies.
 
-Saved calendar IDs must exactly match the discovered catalog. Book does not guess account mappings or replace old IDs. If an old ID is no longer available, update the meeting type and blocking-calendar settings in the admin panel. When no blocking calendars are selected, Book checks every discovered calendar. A missing booking target or Calendar API configuration, an unreadable selected calendar, or an availability error returns HTTP 503 instead of offering slots. Admin pages remain available for configuration.
+Booking targets currently require an exact Google calendar with a positive create capability, notification policy `none`, and conferencing support when video is enabled. Microsoft and Apple can participate in availability checks.
+
+Saved calendar IDs must exactly match the discovered catalog. Book does not guess account mappings or replace old IDs. If an old ID is no longer available, update the meeting type and blocking-calendar settings in the admin panel. For explicit selections, Book checks only providers required by those IDs and the booking target. When the saved selection is empty (All mode), Book requires complete catalogs from all providers before checking every registered calendar; an unavailable provider is not silently omitted. A missing booking target or Calendar API configuration, an unreadable selected calendar, or an availability error returns HTTP 503 instead of offering slots. Admin pages remain available for configuration.
 
 All-day events continue to block days only when their titles match configured keywords. Timed events and existing Book reservations block overlapping slots, including buffers. Conservative availability checks may hide otherwise free slots when the provider cannot prove a complete response.
+
+Admin shows unavailable provider warnings and retains hidden saved selections when other settings are saved. Unavailable selections have a separate explicit removal control: removing one means Book will stop checking that calendar. Select All explicitly or keep at least one selection; an empty checkbox submission does not silently change selected mode to All. An unavailable existing booking target stays selected until explicitly changed.
+
+Settings forms compare both blocking-calendar IDs and all-day keywords atomically. Stale forms return a conflict rather than overwriting newer settings. Booking reservations compare the settings snapshot used for availability under the same lock, so a changed blocking configuration rejects the reservation before any provider write. Target edits also reject a calendar changed since the form was loaded.
 
 ## Booking state and recovery
 
