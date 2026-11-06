@@ -19,6 +19,7 @@ import (
 )
 
 type publicStore interface {
+	BookingSettings(context.Context) (model.BookingSettings, error)
 	ListMeetingTypes(context.Context, bool) ([]model.MeetingType, error)
 	GetMeetingType(context.Context, string) (*model.MeetingType, error)
 	ListMeetingTypeHours(context.Context, int64) ([]model.MeetingTypeHours, error)
@@ -115,6 +116,13 @@ func (h *PublicHandler) slots(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PublicHandler) generateSlots(ctx context.Context, mt *model.MeetingType, date time.Time, guestTZ string) ([]model.TimeSlot, error) {
+	settings, err := h.store.BookingSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return h.generateSlotsForSettings(ctx, mt, date, guestTZ, settings)
+}
+func (h *PublicHandler) generateSlotsForSettings(ctx context.Context, mt *model.MeetingType, date time.Time, guestTZ string, settings model.BookingSettings) ([]model.TimeSlot, error) {
 	if mt.CalendarID == "" || !h.cal.Enabled() {
 		return nil, fmt.Errorf("booking calendar unavailable")
 	}
@@ -160,14 +168,11 @@ func (h *PublicHandler) generateSlots(ctx context.Context, mt *model.MeetingType
 		return nil, nil // daily limit reached
 	}
 
-	calEvents, err := h.availabilityEvents(ctx, mt.CalendarID, dayStart, dayEnd.Add(time.Duration(mt.BufferMin)*time.Minute))
+	calEvents, err := h.availabilityEventsForSettings(ctx, mt.CalendarID, dayStart, dayEnd.Add(time.Duration(mt.BufferMin)*time.Minute), settings, mt.VideoCall)
 	if err != nil {
 		return nil, err
 	}
-	rawKeywords, err := h.store.GetSetting(ctx, "block_allday_keywords")
-	if err != nil {
-		return nil, err
-	}
+	rawKeywords := settings.Keywords
 	blockKeywords := []string{}
 	for _, keyword := range strings.Split(strings.ToLower(rawKeywords), "\n") {
 		if keyword = strings.TrimSpace(keyword); keyword != "" {
@@ -265,7 +270,12 @@ func (h *PublicHandler) book(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slots, err := h.generateSlots(r.Context(), mt, startTime.In(h.timezone), guestLoc.String())
+	settings, err := h.store.BookingSettings(r.Context())
+	if err != nil {
+		http.Error(w, "Availability temporarily unavailable", 503)
+		return
+	}
+	slots, err := h.generateSlotsForSettings(r.Context(), mt, startTime.In(h.timezone), guestLoc.String(), settings)
 	if err != nil {
 		http.Error(w, "Availability temporarily unavailable", http.StatusServiceUnavailable)
 		return
@@ -290,7 +300,7 @@ func (h *PublicHandler) book(w http.ResponseWriter, r *http.Request) {
 	booking := &model.Booking{
 		MeetingTypeID: mt.ID, GuestName: guestName, GuestEmail: guestEmail,
 		StartTime: startTime.UTC(), EndTime: endTime.UTC(), Timezone: guestLoc.String(),
-		Status: "pending", CalendarIDSnapshot: mt.CalendarID,
+		Status: "pending", CalendarIDSnapshot: mt.CalendarID, ExpectedSettings: &settings, ExpectedBufferMin: mt.BufferMin,
 	}
 	// A failed commit may already have reserved the slot. Never dispatch after
 	// any reservation error, and never tell the guest it is safe to retry one.
@@ -453,11 +463,15 @@ func filterByCalendars(events []calendarapi.Event, calIDs []string) []calendarap
 
 // availabilityEvents requires each exact configured calendar to be readable.
 // Each exact ID must pass the complete expanded V2 read contract.
-func (h *PublicHandler) availabilityEvents(ctx context.Context, targetID string, start, end time.Time) ([]calendarapi.Event, error) {
-	raw, err := h.store.GetSetting(ctx, "block_calendars")
+func (h *PublicHandler) availabilityEvents(ctx context.Context, targetID string, start, end time.Time, video ...bool) ([]calendarapi.Event, error) {
+	settings, err := h.store.BookingSettings(ctx)
 	if err != nil {
 		return nil, err
 	}
+	return h.availabilityEventsForSettings(ctx, targetID, start, end, settings, video...)
+}
+func (h *PublicHandler) availabilityEventsForSettings(ctx context.Context, targetID string, start, end time.Time, settings model.BookingSettings, video ...bool) ([]calendarapi.Event, error) {
+	raw := settings.Calendars
 	ids := []string{}
 	for _, id := range strings.Split(raw, "\n") {
 		if id = strings.TrimSpace(id); id != "" {
@@ -470,37 +484,61 @@ func (h *PublicHandler) availabilityEvents(ctx context.Context, targetID string,
 		}
 		return nil, nil
 	}
-	calendars, err := h.cal.ListCalendars(ctx)
-	if err != nil {
-		return nil, err
-	}
-	known := map[string]bool{}
-	writableTarget := false
-	for _, cal := range calendars {
-		if cal.ID == "" {
-			return nil, fmt.Errorf("invalid calendar catalog")
-		}
-		known[cal.ID] = true
-
-		if cal.ID == targetID && !cal.ReadOnly {
-			writableTarget = true
+	providers := map[string]bool{}
+	if len(ids) == 0 {
+		for _, p := range calendarapi.Providers() {
+			providers[p] = true
 		}
 	}
-	if targetID != "" && !writableTarget {
-		return nil, fmt.Errorf("booking calendar unavailable")
+	for _, id := range append(append([]string{}, ids...), targetID) {
+		if id == "" {
+			continue
+		}
+		p, ok := calendarapi.CalendarProvider(id)
+		if !ok {
+			return nil, fmt.Errorf("configured calendar identity is ambiguous")
+		}
+		providers[p] = true
+	}
+	known := map[string]calendarapi.Calendar{}
+	for _, provider := range calendarapi.Providers() {
+		if !providers[provider] {
+			continue
+		}
+		calendars, err := h.cal.ListProviderCalendars(ctx, provider)
+		if err != nil {
+			return nil, fmt.Errorf("required calendar provider unavailable")
+		}
+		for _, calendar := range calendars {
+			known[calendar.ID] = calendar
+		}
+	}
+	if len(ids) == 0 {
+		for _, provider := range calendarapi.Providers() {
+			for id, calendar := range known {
+				if calendar.Provider == provider {
+					ids = append(ids, id)
+				}
+			}
+		}
+	}
+	if targetID != "" {
+		target, ok := known[targetID]
+		if !ok || target.ReadOnly {
+			return nil, fmt.Errorf("booking calendar unavailable")
+		}
+		requireVideo := len(video) > 0 && video[0]
+		if err := h.cal.CheckBookingTarget(ctx, targetID, requireVideo); err != nil {
+			return nil, err
+		}
 	}
 	if len(known) == 0 {
 		return nil, fmt.Errorf("calendar catalog unavailable")
 	}
-	if len(ids) == 0 {
-		for _, cal := range calendars {
-			ids = append(ids, cal.ID)
-		}
-	}
 	events := []calendarapi.Event{}
 	seen := map[string]bool{}
 	for _, id := range ids {
-		if !known[id] {
+		if _, exists := known[id]; !exists {
 			return nil, fmt.Errorf("configured calendar unavailable")
 		}
 

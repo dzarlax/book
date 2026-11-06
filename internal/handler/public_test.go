@@ -26,6 +26,7 @@ type availabilityStore struct {
 	globalHoursReads int
 	mt               model.MeetingType
 	setting          string
+	blockKeywords    string
 	settingErr       error
 	hours            []model.WorkingHours
 	bookings         []model.Booking
@@ -37,6 +38,11 @@ type availabilityStore struct {
 	mu               sync.Mutex
 }
 
+func (s *availabilityStore) BookingSettings(context.Context) (model.BookingSettings, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return model.BookingSettings{Calendars: s.setting, Keywords: s.blockKeywords}, s.settingErr
+}
 func (s *availabilityStore) GetMeetingType(context.Context, string) (*model.MeetingType, error) {
 	return &s.mt, nil
 }
@@ -71,6 +77,9 @@ func (s *availabilityStore) ReserveBooking(_ context.Context, b *model.Booking, 
 	defer s.mu.Unlock()
 	if s.reserveErr != nil {
 		return s.reserveErr
+	}
+	if b.ExpectedSettings == nil || *b.ExpectedSettings != (model.BookingSettings{Calendars: s.setting, Keywords: s.blockKeywords}) || b.ExpectedBufferMin != s.mt.BufferMin {
+		return storage.ErrBookingStateConflict
 	}
 	if s.pending != nil {
 		return storage.ErrBookingConflict
@@ -115,14 +124,14 @@ func TestAvailabilityRequiresExactAccessibleCalendars(t *testing.T) {
 	for _, scenario := range []string{"catalog_error", "missing_selected", "event_error", "wrong_identity", "invalid_event", "explicit_success", "all_calendars"} {
 		t.Run(scenario, func(t *testing.T) {
 			queries := []string{}
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := newCalendarFixtureServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				if r.URL.Path == "/api/calendars" {
 					if scenario == "catalog_error" {
 						http.Error(w, "offline", 503)
 						return
 					}
-					fmt.Fprint(w, `[{"id":"google:exact"},{"id":"google:second"}]`)
+					fmt.Fprint(w, `[{"id":"google:acct:exact"},{"id":"google:acct:second"}]`)
 					return
 				}
 				id := r.URL.Query().Get("calendar_id")
@@ -132,17 +141,17 @@ func TestAvailabilityRequiresExactAccessibleCalendars(t *testing.T) {
 					return
 				}
 				if scenario == "wrong_identity" {
-					fmt.Fprint(w, `[{"calendar_id":"google:other","start":"2030-01-01T09:00:00Z","end":"2030-01-01T10:00:00Z"}]`)
+					fmt.Fprint(w, `[{"calendar_id":"google:acct:other","start":"2030-01-01T09:00:00Z","end":"2030-01-01T10:00:00Z"}]`)
 					return
 				}
 				if scenario == "invalid_event" {
-					fmt.Fprint(w, `[{"calendar_id":"google:exact"}]`)
+					fmt.Fprint(w, `[{"calendar_id":"google:acct:exact"}]`)
 					return
 				}
 				writeAvailabilityPage(w, r, nil)
 			}))
 			defer server.Close()
-			store := &availabilityStore{setting: "google:exact"}
+			store := &availabilityStore{setting: "google:acct:exact"}
 			if scenario == "missing_selected" {
 				store.setting = "google:primary"
 			}
@@ -182,7 +191,7 @@ func TestBookingRechecksAvailabilityBeforeMutation(t *testing.T) {
 	for _, scenario := range []string{"busy", "outage", "off_grid", "inactive", "old_target_id", "success"} {
 		t.Run(scenario, func(t *testing.T) {
 			writes := 0
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := newCalendarFixtureServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				if r.Method == http.MethodPost {
 					writes++
@@ -190,7 +199,7 @@ func TestBookingRechecksAvailabilityBeforeMutation(t *testing.T) {
 					return
 				}
 				if r.URL.Path == "/api/calendars" {
-					fmt.Fprint(w, `[{"id":"google:exact"}]`)
+					fmt.Fprint(w, `[{"id":"google:acct:exact"}]`)
 					return
 				}
 				if scenario == "outage" {
@@ -199,12 +208,12 @@ func TestBookingRechecksAvailabilityBeforeMutation(t *testing.T) {
 				}
 				events := []calendarapi.Event{}
 				if scenario == "busy" {
-					events = append(events, calendarapi.Event{CalendarID: "google:exact", Start: start, End: start.Add(time.Hour)})
+					events = append(events, calendarapi.Event{CalendarID: "google:acct:exact", Start: start, End: start.Add(time.Hour)})
 				}
 				writeAvailabilityPage(w, r, events)
 			}))
 			defer server.Close()
-			store := &availabilityStore{setting: "google:exact", mt: model.MeetingType{ID: 1, Slug: "meeting", DurationMin: 30, BufferMin: 0, CalendarID: "google:exact", Active: scenario != "inactive"}}
+			store := &availabilityStore{setting: "google:acct:exact", mt: model.MeetingType{ID: 1, Slug: "meeting", DurationMin: 30, BufferMin: 0, CalendarID: "google:acct:exact", Active: scenario != "inactive"}}
 			if scenario == "old_target_id" {
 				store.mt.CalendarID = "google:primary"
 			}
@@ -246,7 +255,7 @@ func TestBookingReservationGuardsProviderDispatch(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			var mu sync.Mutex
 			writes := 0
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := newCalendarFixtureServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				if r.Method == http.MethodPost {
 					mu.Lock()
@@ -272,13 +281,13 @@ func TestBookingReservationGuardsProviderDispatch(t *testing.T) {
 					return
 				}
 				if r.URL.Path == "/api/calendars" {
-					fmt.Fprint(w, `[{"id":"google:exact"}]`)
+					fmt.Fprint(w, `[{"id":"google:acct:exact"}]`)
 					return
 				}
 				writeAvailabilityPage(w, r, nil)
 			}))
 			defer server.Close()
-			store := &availabilityStore{setting: "google:exact", mt: model.MeetingType{ID: 1, Slug: "meeting", DurationMin: 30, CalendarID: "google:exact", Active: true}}
+			store := &availabilityStore{setting: "google:acct:exact", mt: model.MeetingType{ID: 1, Slug: "meeting", DurationMin: 30, CalendarID: "google:acct:exact", Active: true}}
 			if scenario == "reserve_commit_error" {
 				store.reserveErr = errors.New("synthetic ambiguous commit")
 			}
@@ -383,10 +392,10 @@ func TestAvailabilityIncludesBufferAcrossMidnight(t *testing.T) {
 	for _, source := range []string{"calendar", "booking"} {
 		t.Run(source, func(t *testing.T) {
 			checked := false
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := newCalendarFixtureServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				if r.URL.Path == "/api/calendars" {
-					fmt.Fprint(w, `[{"id":"google:exact"}]`)
+					fmt.Fprint(w, `[{"id":"google:acct:exact"}]`)
 					return
 				}
 				queryEnd, err := time.Parse(time.RFC3339, r.URL.Query().Get("end"))
@@ -396,16 +405,16 @@ func TestAvailabilityIncludesBufferAcrossMidnight(t *testing.T) {
 				checked = queryEnd.Equal(midnight.Add(30 * time.Minute))
 				events := []calendarapi.Event{}
 				if source == "calendar" && queryEnd.After(midnight.Add(10*time.Minute)) {
-					events = append(events, calendarapi.Event{CalendarID: "google:exact", Start: midnight.Add(10 * time.Minute), End: midnight.Add(20 * time.Minute)})
+					events = append(events, calendarapi.Event{CalendarID: "google:acct:exact", Start: midnight.Add(10 * time.Minute), End: midnight.Add(20 * time.Minute)})
 				}
 				writeAvailabilityPage(w, r, events)
 			}))
 			defer server.Close()
-			store := &availabilityStore{setting: "google:exact", hours: []model.WorkingHours{{DayOfWeek: int(day.Weekday()), StartTime: "23:00", EndTime: "24:00", Active: true}}}
+			store := &availabilityStore{setting: "google:acct:exact", hours: []model.WorkingHours{{DayOfWeek: int(day.Weekday()), StartTime: "23:00", EndTime: "24:00", Active: true}}}
 			if source == "booking" {
 				store.bookings = []model.Booking{{StartTime: midnight.Add(10 * time.Minute), EndTime: midnight.Add(20 * time.Minute), Status: "pending"}}
 			}
-			mt := &model.MeetingType{ID: 1, CalendarID: "google:exact", Active: true, DurationMin: 60, BufferMin: 30}
+			mt := &model.MeetingType{ID: 1, CalendarID: "google:acct:exact", Active: true, DurationMin: 60, BufferMin: 30}
 			h := &PublicHandler{store: store, cal: calendarapi.New(server.URL, ""), timezone: time.UTC}
 			slots, err := h.generateSlots(t.Context(), mt, day, "UTC")
 			if err != nil || len(slots) != 1 || slots[0].Available || !checked {
@@ -416,7 +425,7 @@ func TestAvailabilityIncludesBufferAcrossMidnight(t *testing.T) {
 }
 
 func TestSlotsUnavailableWithoutConfiguredCalendar(t *testing.T) {
-	for _, target := range []string{"", "google:exact"} {
+	for _, target := range []string{"", "google:acct:exact"} {
 		t.Run(target, func(t *testing.T) {
 			store := &availabilityStore{mt: model.MeetingType{ID: 1, Active: true, DurationMin: 30, CalendarID: target}}
 			h := &PublicHandler{store: store, cal: calendarapi.New("", ""), timezone: time.UTC}
@@ -430,13 +439,13 @@ func TestSlotsUnavailableWithoutConfiguredCalendar(t *testing.T) {
 }
 
 func TestV2AppleAvailabilitySupported(t *testing.T) {
-	for _, selection := range []string{"apple:/calendar/", ""} {
+	for _, selection := range []string{"apple:acct:/calendar/", ""} {
 		t.Run(selection, func(t *testing.T) {
 			reads := 0
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := newCalendarFixtureServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				if r.URL.Path == "/api/calendars" {
-					fmt.Fprint(w, `[{"id":"google:exact","provider":"google"},{"id":"apple:/calendar/","provider":"apple"}]`)
+					fmt.Fprint(w, `[{"id":"google:acct:exact","provider":"google"},{"id":"apple:acct:/calendar/","provider":"apple"}]`)
 					return
 				}
 				reads++
@@ -444,7 +453,7 @@ func TestV2AppleAvailabilitySupported(t *testing.T) {
 			}))
 			defer server.Close()
 			h := &PublicHandler{store: &availabilityStore{setting: selection}, cal: calendarapi.New(server.URL, ""), timezone: time.UTC}
-			_, err := h.availabilityEvents(t.Context(), "google:exact", time.Now(), time.Now().Add(time.Hour))
+			_, err := h.availabilityEvents(t.Context(), "google:acct:exact", time.Now(), time.Now().Add(time.Hour))
 			if err != nil {
 				t.Fatalf("unsafe Apple availability: reads=%d err=%v", reads, err)
 			}
@@ -455,26 +464,26 @@ func TestV2AppleAvailabilitySupported(t *testing.T) {
 func TestHoursReadFailureDoesNotUseGlobalSchedule(t *testing.T) {
 	store := &availabilityStore{hoursErr: errors.New("synthetic type-hours failure")}
 	h := &PublicHandler{store: store, cal: calendarapi.New("http://unused.invalid", ""), timezone: time.UTC}
-	slots, err := h.generateSlots(t.Context(), &model.MeetingType{ID: 1, Active: true, CalendarID: "google:exact", DurationMin: 30}, time.Now().AddDate(0, 0, 3), "UTC")
+	slots, err := h.generateSlots(t.Context(), &model.MeetingType{ID: 1, Active: true, CalendarID: "google:acct:exact", DurationMin: 30}, time.Now().AddDate(0, 0, 3), "UTC")
 	if err == nil || len(slots) > 0 || store.globalHoursReads != 0 {
 		t.Fatalf("unsafe fallback: err=%v slots=%v global reads=%d", err, slots, store.globalHoursReads)
 	}
 }
 
 func TestV2MicrosoftAvailabilitySupported(t *testing.T) {
-	for _, selection := range []string{"microsoft:calendar", ""} {
+	for _, selection := range []string{"microsoft:acct:calendar", ""} {
 		t.Run(selection, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := newCalendarFixtureServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				if r.URL.Path == "/api/calendars" {
-					fmt.Fprint(w, `[{"id":"google:exact","provider":"google"},{"id":"microsoft:calendar","provider":"microsoft"}]`)
+					fmt.Fprint(w, `[{"id":"google:acct:exact","provider":"google"},{"id":"microsoft:acct:calendar","provider":"microsoft"}]`)
 					return
 				}
 				writeAvailabilityPage(w, r, nil)
 			}))
 			defer server.Close()
 			h := &PublicHandler{store: &availabilityStore{setting: selection}, cal: calendarapi.New(server.URL, ""), timezone: time.UTC}
-			_, err := h.availabilityEvents(t.Context(), "google:exact", time.Now(), time.Now().Add(time.Hour))
+			_, err := h.availabilityEvents(t.Context(), "google:acct:exact", time.Now(), time.Now().Add(time.Hour))
 			if err != nil {
 				t.Fatalf("unsafe Microsoft availability: %v", err)
 			}
@@ -504,7 +513,7 @@ func TestBookingCreateUsesReservedCalendarSnapshot(t *testing.T) {
 	day := time.Now().UTC().AddDate(0, 0, 3)
 	start := time.Date(day.Year(), day.Month(), day.Day(), 10, 0, 0, 0, time.UTC)
 	target := ""
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newCalendarFixtureServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPost {
 			var body calendarapi.CreateEventRequest
@@ -516,13 +525,13 @@ func TestBookingCreateUsesReservedCalendarSnapshot(t *testing.T) {
 			return
 		}
 		if r.URL.Path == "/api/calendars" {
-			fmt.Fprint(w, `[{"id":"google:exact"}]`)
+			fmt.Fprint(w, `[{"id":"google:acct:exact"}]`)
 			return
 		}
 		writeAvailabilityPage(w, r, nil)
 	}))
 	defer server.Close()
-	store := &availabilityStore{setting: "google:exact", mt: model.MeetingType{ID: 1, Active: true, DurationMin: 30, CalendarID: "google:exact"}}
+	store := &availabilityStore{setting: "google:acct:exact", mt: model.MeetingType{ID: 1, Active: true, DurationMin: 30, CalendarID: "google:acct:exact"}}
 	store.onReserved = func() { store.mt.CalendarID = "google:changed-after-reservation" }
 	h := &PublicHandler{store: store, cal: calendarapi.New(server.URL, ""), timezone: time.UTC}
 	form := url.Values{"start": {start.Format("2006-01-02T15:04")}, "tz": {"UTC"}, "name": {"Synthetic"}, "email": {"test@example.invalid"}}
@@ -530,7 +539,7 @@ func TestBookingCreateUsesReservedCalendarSnapshot(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	response := httptest.NewRecorder()
 	h.Routes().ServeHTTP(response, req)
-	if response.Code != 200 || target != "google:exact" || store.pending.CalendarIDSnapshot != "google:exact" {
+	if response.Code != 200 || target != "google:acct:exact" || store.pending.CalendarIDSnapshot != "google:acct:exact" {
 		t.Fatalf("status=%d target=%q snapshot=%q", response.Code, target, store.pending.CalendarIDSnapshot)
 	}
 }
@@ -541,7 +550,7 @@ func TestMicrosoftBookingTargetRejectedBeforeReservation(t *testing.T) {
 	for _, id := range []string{"microsoft@account:calendar", "microsoft:account:calendar"} {
 		t.Run(id, func(t *testing.T) {
 			calls := 0
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := newCalendarFixtureServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls++
 				t.Errorf("unsupported target reached calendar API: %s %s", r.Method, r.URL)
 				http.Error(w, "unexpected", 500)

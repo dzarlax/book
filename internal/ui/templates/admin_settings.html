@@ -14,7 +14,10 @@
 {{template "admin_nav" "settings"}}
 
 <div class="card" style="max-width:600px">
-    <form hx-post="/admin/settings">
+    <form id="calendar-settings-form" hx-post="/admin/settings">
+ <input type="hidden" name="selection_version" value="{{.SelectionVersion}}">
+ {{range .CatalogWarnings}}<p role="alert" style="color:var(--text-tertiary)">{{.}}</p>{{end}}
+ <p id="settings-save-error" role="alert" hidden></p>
         <div class="form-group">
             <label for="block_allday_keywords">Block day by all-day event keywords</label>
             <textarea id="block_allday_keywords" name="block_allday_keywords"
@@ -27,15 +30,19 @@
 
         <div class="form-group">
             <label>Calendars used for blocking</label>
+            <label class="check-row"><input type="radio" name="blocking_mode" value="all" {{if .AllCalendars}}checked{{end}}>All registered calendars (requires every provider to be available)</label>
+            <label class="check-row"><input type="radio" name="blocking_mode" value="selected" {{if not .AllCalendars}}checked{{end}}>Only explicitly selected calendars</label>
+            <p class="card__meta">Selected mode excludes other calendars and providers from availability checks. Unavailable saved selections remain blocking until you explicitly remove them.</p>
             {{if .Calendars}}
                 <p style="color:var(--text-tertiary);font-size:0.8rem;margin-bottom:12px">
-                    Select which calendars are checked for busy slots. If none are selected, all calendars are used.
+                    Choose calendars for selected mode. To include every calendar, choose All registered calendars.
                 </p>
                 {{range .Calendars}}
                 <div style="margin-bottom:12px">
                     <p style="font-size:0.75rem;font-weight:600;text-transform:uppercase;color:var(--text-tertiary);margin:0 0 6px">{{.Provider}}</p>
                     {{range .Calendars}}
                     <label class="check-row">
+                        <input type="hidden" name="visible_calendars" value="{{.ID}}">
                         <input type="checkbox" name="block_calendars" value="{{.ID}}"
                                {{if index $.SelectedCals .ID}}checked{{end}}>
                         <span>{{.Name}}</span>
@@ -46,14 +53,25 @@
                 {{end}}
             {{else}}
                 <p style="color:var(--text-tertiary);font-size:0.85rem">
-                    No calendar integration configured. Set <code>CALENDAR_API_URL</code> to enable calendar selection.
+                    No calendars could be verified. Existing selections are retained; check the provider warnings above.
                 </p>
             {{end}}
         </div>
 
+        {{if .UnavailableSelections}}<div class="form-group"><label>Retained unavailable selections</label>
+        {{range .UnavailableSelections}}<div style="margin-top:12px"><p>{{.Name}}</p><label class="check-row"><input type="checkbox" name="remove_unavailable" value="{{.ID}}">Explicitly remove this saved selection from blocking</label></div>{{end}}
+        <p class="card__meta">Removing a selection means Book will no longer check that calendar. If this is your last selection, choose All or select another calendar.</p></div>{{end}}
         <button type="submit" class="btn btn--primary">Save</button>
     </form>
 </div>
 
+<script>
+document.body.addEventListener('htmx:responseError', function(event) {
+    if (event.detail.elt !== document.getElementById('calendar-settings-form')) return;
+    var notice = document.getElementById('settings-save-error');
+    notice.hidden = false;
+    notice.textContent = 'Settings could not be confirmed saved. Refresh this page and review retained calendar selections before trying again.';
+});
+</script>
 {{template "foot" .}}
 {{end}}

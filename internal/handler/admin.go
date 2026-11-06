@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"html/template"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -22,7 +21,19 @@ type cancellationStore interface {
 	FinishCancellation(context.Context, int64) error
 }
 
+type bookingSettingsStore interface {
+	GetSetting(context.Context, string) (string, error)
+	UpdateBookingSettings(context.Context, string, string, string, string) error
+}
+
+type meetingTypeEditor interface {
+	GetMeetingTypeByID(context.Context, int64) (*model.MeetingType, error)
+	UpdateMeetingTypeAtCalendar(context.Context, *model.MeetingType, string) error
+}
+
 type AdminHandler struct {
+	meetingTypes  meetingTypeEditor
+	settingsStore bookingSettingsStore
 	cancellations cancellationStore
 	store         *storage.Storage
 	cal           *calendarapi.Client
@@ -31,7 +42,7 @@ type AdminHandler struct {
 }
 
 func NewAdminHandler(store *storage.Storage, cal *calendarapi.Client, tmpl *template.Template, tz *time.Location) *AdminHandler {
-	return &AdminHandler{cancellations: store, store: store, cal: cal, tmpl: tmpl, timezone: tz}
+	return &AdminHandler{meetingTypes: store, settingsStore: store, cancellations: store, store: store, cal: cal, tmpl: tmpl, timezone: tz}
 }
 
 type calendarGroup struct {
@@ -43,41 +54,6 @@ type calendarOption struct {
 	ID       string
 	Name     string
 	ReadOnly bool
-}
-
-func (h *AdminHandler) fetchCalendarGroups(r *http.Request) []calendarGroup {
-	return h.fetchCalendarGroupsFiltered(r, true)
-}
-
-func (h *AdminHandler) fetchAllCalendarGroups(r *http.Request) []calendarGroup {
-	return h.fetchCalendarGroupsFiltered(r, false)
-}
-
-func (h *AdminHandler) fetchCalendarGroupsFiltered(r *http.Request, writeableOnly bool) []calendarGroup {
-	if !h.cal.Enabled() {
-		return nil
-	}
-	cals, err := h.cal.ListCalendars(r.Context())
-	if err != nil {
-		log.Printf("fetch calendars: %v", err)
-		return nil
-	}
-	grouped := make(map[string][]calendarOption)
-	var order []string
-	for _, c := range cals {
-		if writeableOnly && c.ReadOnly {
-			continue
-		}
-		if _, ok := grouped[c.Provider]; !ok {
-			order = append(order, c.Provider)
-		}
-		grouped[c.Provider] = append(grouped[c.Provider], calendarOption{ID: c.ID, Name: c.Name, ReadOnly: c.ReadOnly})
-	}
-	groups := make([]calendarGroup, len(order))
-	for i, p := range order {
-		groups[i] = calendarGroup{Provider: providerLabel(p), Calendars: grouped[p]}
-	}
-	return groups
 }
 
 func providerLabel(p string) string {
@@ -143,17 +119,25 @@ func (h *AdminHandler) listTypes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) newTypeForm(w http.ResponseWriter, r *http.Request) {
+	catalog := h.loadCatalogue(r.Context(), true)
 	h.render(w, "admin_type_form.html", map[string]any{
-		"Title":          "New Meeting Type — Admin",
-		"ContainerClass": " container--wide",
-		"Meeting":        &model.MeetingType{DurationMin: 30, BufferMin: 10, MaxPerDay: 8, Active: true},
-		"IsNew":          true,
-		"Calendars":      h.fetchCalendarGroups(r),
+		"Title":           "New Meeting Type — Admin",
+		"ContainerClass":  " container--wide",
+		"Meeting":         &model.MeetingType{DurationMin: 30, BufferMin: 10, MaxPerDay: 8, Active: true},
+		"IsNew":           true,
+		"Calendars":       catalog.Groups,
+		"CatalogWarnings": catalog.Warnings,
 	})
 }
 
 func (h *AdminHandler) createType(w http.ResponseWriter, r *http.Request) {
 	mt := h.parseMeetingTypeForm(r)
+	if mt.CalendarID != "" {
+		if err := h.cal.CheckBookingTarget(r.Context(), mt.CalendarID, mt.VideoCall); err != nil {
+			http.Error(w, "Selected booking calendar cannot create this meeting", 503)
+			return
+		}
+	}
 	if err := h.store.CreateMeetingType(r.Context(), mt); err != nil {
 		http.Error(w, "Failed to create", http.StatusInternalServerError)
 		return
@@ -176,13 +160,24 @@ func (h *AdminHandler) editTypeForm(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	catalog := h.loadCatalogue(r.Context(), true)
+	targetVisible := false
+	for _, group := range catalog.Groups {
+		for _, calendar := range group.Calendars {
+			if calendar.ID == mt.CalendarID {
+				targetVisible = true
+			}
+		}
+	}
 	h.render(w, "admin_type_form.html", map[string]any{
-		"Title":          "Edit — Admin",
-		"ContainerClass": " container--wide",
-		"Meeting":        mt,
-		"IsNew":          false,
-		"Calendars":      h.fetchCalendarGroups(r),
-		"CustomDays":     h.buildCustomDays(r, mt.ID),
+		"TargetUnavailable": mt.CalendarID != "" && !targetVisible,
+		"Title":             "Edit — Admin",
+		"ContainerClass":    " container--wide",
+		"Meeting":           mt,
+		"IsNew":             false,
+		"Calendars":         catalog.Groups,
+		"CatalogWarnings":   catalog.Warnings,
+		"CustomDays":        h.buildCustomDays(r, mt.ID),
 	})
 }
 
@@ -232,7 +227,34 @@ func (h *AdminHandler) updateType(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	mt := h.parseMeetingTypeForm(r)
 	mt.ID = id
-	if err := h.store.UpdateMeetingType(r.Context(), mt); err != nil {
+	editor := h.meetingTypes
+	if editor == nil {
+		editor = h.store
+	}
+	old, err := editor.GetMeetingTypeByID(r.Context(), id)
+	if err != nil || old == nil {
+		http.Error(w, "Meeting type unavailable", 503)
+		return
+	}
+	expected, hasExpected := r.Form["original_calendar_id"]
+	if !hasExpected || len(expected) != 1 || expected[0] != old.CalendarID {
+		http.Error(w, "Booking calendar changed. Refresh before saving.", 409)
+		return
+	}
+	if _, provided := r.Form["calendar_id"]; !provided {
+		mt.CalendarID = old.CalendarID
+	}
+	if mt.CalendarID != "" && mt.CalendarID != old.CalendarID {
+		if err := h.cal.CheckBookingTarget(r.Context(), mt.CalendarID, mt.VideoCall); err != nil {
+			http.Error(w, "Selected booking calendar cannot create this meeting", 503)
+			return
+		}
+	}
+	if err := editor.UpdateMeetingTypeAtCalendar(r.Context(), mt, expected[0]); err != nil {
+		if errors.Is(err, storage.ErrSettingsConflict) {
+			http.Error(w, "Booking calendar changed. Refresh before saving.", 409)
+			return
+		}
 		http.Error(w, "Failed to update", http.StatusInternalServerError)
 		return
 	}
@@ -351,38 +373,67 @@ func (h *AdminHandler) cancelBooking(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *AdminHandler) settings(w http.ResponseWriter, r *http.Request) {
-	keywords, _ := h.store.GetSetting(r.Context(), "block_allday_keywords")
-	blockCalsRaw, _ := h.store.GetSetting(r.Context(), "block_calendars")
-	selectedCals := make(map[string]bool)
-	for _, id := range strings.Split(blockCalsRaw, "\n") {
-		id = strings.TrimSpace(id)
-		if id != "" {
-			selectedCals[id] = true
-		}
+func (h *AdminHandler) bookingSettings() bookingSettingsStore {
+	if h.settingsStore != nil {
+		return h.settingsStore
 	}
-	h.render(w, "admin_settings.html", map[string]any{
-		"Title":          "Settings — Admin",
-		"ContainerClass": " container--wide",
-		"BlockKeywords":  keywords,
-		"Calendars":      h.fetchAllCalendarGroups(r),
-		"SelectedCals":   selectedCals,
-	})
+	return h.store
 }
-
-func (h *AdminHandler) saveSettings(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	if err := h.store.SetSetting(r.Context(), "block_allday_keywords", r.FormValue("block_allday_keywords")); err != nil {
-		http.Error(w, "Failed to save", http.StatusInternalServerError)
+func (h *AdminHandler) settings(w http.ResponseWriter, r *http.Request) {
+	store := h.bookingSettings()
+	keywords, err := store.GetSetting(r.Context(), "block_allday_keywords")
+	if err != nil {
+		http.Error(w, "Settings unavailable", 503)
 		return
 	}
-	blockCals := strings.Join(r.Form["block_calendars"], "\n")
-	if err := h.store.SetSetting(r.Context(), "block_calendars", blockCals); err != nil {
-		http.Error(w, "Failed to save", http.StatusInternalServerError)
+	raw, err := store.GetSetting(r.Context(), "block_calendars")
+	if err != nil {
+		http.Error(w, "Settings unavailable", 503)
+		return
+	}
+	selected := map[string]bool{}
+	for _, id := range selectionIDs(raw) {
+		selected[id] = true
+	}
+	catalog := h.loadCatalogue(r.Context(), false)
+	h.render(w, "admin_settings.html", map[string]any{"Title": "Settings — Admin", "ContainerClass": " container--wide", "BlockKeywords": keywords, "Calendars": catalog.Groups, "SelectedCals": selected, "CatalogWarnings": catalog.Warnings, "UnavailableSelections": unavailableSelections(raw, catalog.Known), "SelectionVersion": selectionVersion(raw, keywords), "AllCalendars": len(selected) == 0})
+}
+func (h *AdminHandler) saveSettings(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid settings", 400)
+		return
+	}
+	store := h.bookingSettings()
+	old, err := store.GetSetting(r.Context(), "block_calendars")
+	if err != nil {
+		http.Error(w, "Settings unavailable", 503)
+		return
+	}
+	oldKeywords, err := store.GetSetting(r.Context(), "block_allday_keywords")
+	if err != nil {
+		http.Error(w, "Settings unavailable", 503)
+		return
+	}
+	if r.FormValue("selection_version") != selectionVersion(old, oldKeywords) {
+		http.Error(w, "Settings changed. Refresh before saving.", 409)
+		return
+	}
+	catalog := h.loadCatalogue(r.Context(), false)
+	calendars, err := mergeSelections(old, r.Form["block_calendars"], r.Form["visible_calendars"], r.Form["remove_unavailable"], r.FormValue("blocking_mode"), catalog.Known)
+	if err != nil {
+		http.Error(w, "Calendar selections could not be verified. Review available and retained calendars.", 400)
+		return
+	}
+	if err := store.UpdateBookingSettings(r.Context(), old, oldKeywords, r.FormValue("block_allday_keywords"), calendars); err != nil {
+		if errors.Is(err, storage.ErrSettingsConflict) {
+			http.Error(w, "Settings changed. Refresh before saving.", 409)
+		} else {
+			http.Error(w, "Settings were not confirmed saved. Refresh and review them.", 503)
+		}
 		return
 	}
 	w.Header().Set("HX-Redirect", "/admin/settings")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(200)
 }
 
 func (h *AdminHandler) render(w http.ResponseWriter, name string, data any) {
