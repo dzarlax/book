@@ -35,14 +35,14 @@ func main() {
 	defer store.Close()
 
 	if err := store.Migrate("migrations"); err != nil {
-		log.Printf("warning: migration failed (may already be applied): %v", err)
+		log.Fatalf("database migration failed: %v", err)
 	}
 
 	funcMap := template.FuncMap{
 		"dayName": func(d int) string {
 			return [...]string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}[d]
 		},
-		"list": func(args ...string) []string { return args },
+		"list":  func(args ...string) []string { return args },
 		"lower": strings.ToLower,
 	}
 

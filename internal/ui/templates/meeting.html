@@ -41,13 +41,14 @@
     <span class="htmx-indicator" id="slots-loading"><span class="spinner"></span></span>
 </div>
 
-<div id="slots-container">
+<p id="booking-notice" role="alert" hidden style="color:var(--text-tertiary);margin-top:16px"></p>
+<div id="slots-container" aria-live="polite">
     <p style="color:var(--text-tertiary)">Select a date to see available times.</p>
 </div>
 
 <div id="booking-form" style="display:none;margin-top:32px">
     <h3 style="margin-bottom:16px;font-weight:600">Your details</h3>
-    <form hx-post="/{{.Meeting.Slug}}/book" hx-include="[name='tz']">
+    <form id="booking-request" hx-post="/{{.Meeting.Slug}}/book" hx-include="[name='tz']">
         <input type="hidden" name="start" id="selected-start">
         <div class="form-group">
             <label for="subject">Meeting subject</label>
@@ -69,6 +70,78 @@
 
 <script>
 (function() {
+    var form = document.getElementById('booking-request');
+    var notice = document.getElementById('booking-notice');
+    var slots = document.getElementById('slots-container');
+    var bookingPanel = document.getElementById('booking-form');
+    var submit = form.querySelector('button[type="submit"]');
+    var bookingLocked = false;
+    function message(text) {
+        notice.textContent = text;
+        notice.hidden = false;
+    }
+    function clearSelection() {
+        document.getElementById('selected-start').value = '';
+        bookingPanel.style.display = 'none';
+    }
+    function isBooking(detail) { return detail.elt === form; }
+    function isAvailability(detail) { return detail.target === slots; }
+    function bookingFailure(xhr) {
+        var knownNotCreated = xhr && xhr.getResponseHeader('HX-Booking-State') === 'not-created';
+        if (knownNotCreated) {
+            bookingLocked = false;
+            form.dataset.bookingState = 'not-created';
+            submit.disabled = false;
+            submit.textContent = 'Confirm Booking';
+            clearSelection();
+            slots.textContent = '';
+            message('Your booking was not created. Availability could not be confirmed. Select a date to check again, or contact the host.');
+        } else {
+            bookingLocked = true;
+            form.dataset.bookingState = 'unknown';
+            submit.disabled = true;
+            submit.textContent = 'Awaiting verification';
+            message('We could not confirm the booking result. It may already exist. Please contact the host before booking again; do not resubmit or refresh to retry.');
+        }
+    }
+    document.body.addEventListener('htmx:beforeRequest', function(event) {
+        var detail = event.detail;
+        if (isBooking(detail)) {
+            if (bookingLocked) { event.preventDefault(); return; }
+            bookingLocked = true;
+            form.dataset.bookingState = 'pending';
+            submit.disabled = true;
+            submit.textContent = 'Confirming…';
+            notice.hidden = true;
+        } else if (isAvailability(detail)) {
+            clearSelection();
+            slots.textContent = 'Checking availability…';
+            if (!bookingLocked) notice.hidden = true;
+        }
+    });
+    document.body.addEventListener('htmx:beforeSwap', function(event) {
+        var detail = event.detail;
+        if (isBooking(detail)) {
+            var state = detail.xhr.getResponseHeader('HX-Booking-State');
+            if (detail.xhr.status >= 400 || state === 'unknown' || state === 'not-created' || !detail.xhr.getResponseHeader('HX-Redirect')) {
+                detail.shouldSwap = false;
+                bookingFailure(detail.xhr);
+            }
+        } else if (isAvailability(detail) && detail.xhr.status >= 400) {
+            detail.shouldSwap = false;
+            clearSelection();
+            slots.textContent = 'Availability is temporarily unavailable. Please try checking another time or contact the host.';
+        }
+    });
+    ['htmx:sendError', 'htmx:timeout'].forEach(function(name) {
+        document.body.addEventListener(name, function(event) {
+            if (isBooking(event.detail)) bookingFailure(null);
+            else if (isAvailability(event.detail)) {
+                clearSelection();
+                slots.textContent = 'Availability could not be checked. Please check again later or contact the host.';
+            }
+        });
+    });
     var detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
     var zones = [
         "Europe/London", "Europe/Berlin", "Europe/Paris", "Europe/Madrid",

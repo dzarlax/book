@@ -14,6 +14,8 @@
 
 <script>
 function selectSlot(el, startTime) {
+    var form = document.getElementById('booking-request');
+    if (form && (form.dataset.bookingState === 'pending' || form.dataset.bookingState === 'unknown')) return;
     document.querySelectorAll('.slot--selected').forEach(function(s) { s.classList.remove('slot--selected'); });
     el.classList.add('slot--selected');
     document.getElementById('selected-start').value = startTime;

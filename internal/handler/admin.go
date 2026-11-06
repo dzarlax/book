@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"errors"
 	"html/template"
 	"log"
 	"net/http"
@@ -15,15 +17,21 @@ import (
 	"github.com/dzarlax/book/internal/storage"
 )
 
+type cancellationStore interface {
+	BeginCancellation(context.Context, int64) (*storage.CancellationTarget, error)
+	FinishCancellation(context.Context, int64) error
+}
+
 type AdminHandler struct {
-	store    *storage.Storage
-	cal      *calendarapi.Client
-	tmpl     *template.Template
-	timezone *time.Location
+	cancellations cancellationStore
+	store         *storage.Storage
+	cal           *calendarapi.Client
+	tmpl          *template.Template
+	timezone      *time.Location
 }
 
 func NewAdminHandler(store *storage.Storage, cal *calendarapi.Client, tmpl *template.Template, tz *time.Location) *AdminHandler {
-	return &AdminHandler{store: store, cal: cal, tmpl: tmpl, timezone: tz}
+	return &AdminHandler{cancellations: store, store: store, cal: cal, tmpl: tmpl, timezone: tz}
 }
 
 type calendarGroup struct {
@@ -300,26 +308,45 @@ func (h *AdminHandler) listBookings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) cancelBooking(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-
-	// Get booking to find calendar event ID
-	booking, _ := h.store.GetBooking(r.Context(), id)
-
-	if err := h.store.CancelBooking(r.Context(), id); err != nil {
-		http.Error(w, "Failed to cancel", http.StatusInternalServerError)
+	w.Header().Set("HX-Booking-State", "not-created")
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		http.Error(w, "Invalid booking", http.StatusBadRequest)
 		return
 	}
-
-	// Delete calendar event if exists
-	if booking != nil && booking.CalendarEvent != "" && h.cal.Enabled() {
-		mt, _ := h.store.GetMeetingTypeByID(r.Context(), booking.MeetingTypeID)
-		if mt != nil && mt.CalendarID != "" {
-			if err := h.cal.DeleteEvent(r.Context(), mt.CalendarID, booking.CalendarEvent); err != nil {
-				log.Printf("calendar delete error (non-fatal): %v", err)
-			}
-		}
+	if !h.cal.Enabled() {
+		http.Error(w, "Calendar unavailable; cancellation was not sent", http.StatusServiceUnavailable)
+		return
 	}
-
+	store := h.cancellations
+	if store == nil {
+		store = h.store
+	}
+	// The committed CAS captures the immutable booking target and authorizes
+	// one deletion only. Missing historical snapshots require manual review.
+	w.Header().Set("HX-Booking-State", "unknown")
+	target, err := store.BeginCancellation(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrBookingStateConflict) {
+			http.Error(w, "This booking cannot be cancelled automatically. Its original calendar may not be recorded, or cancellation is already pending. Verify the calendar manually.", http.StatusConflict)
+		} else {
+			http.Error(w, "Cancellation state could not be confirmed. Verify the calendar manually before retrying.", http.StatusServiceUnavailable)
+		}
+		return
+	}
+	if target == nil || strings.TrimSpace(target.CalendarID) == "" || strings.TrimSpace(target.EventID) == "" {
+		http.Error(w, "Original calendar identity is unconfirmed. Verify manually before further action.", http.StatusServiceUnavailable)
+		return
+	}
+	if err := h.cal.DeleteEvent(r.Context(), target.CalendarID, target.EventID); err != nil {
+		http.Error(w, "Cancellation may have completed. Verify the calendar manually; do not repeat the cancellation.", http.StatusServiceUnavailable)
+		return
+	}
+	if err := store.FinishCancellation(r.Context(), id); err != nil {
+		http.Error(w, "Calendar deletion completed but booking status is unconfirmed. Verify manually before further action.", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Del("HX-Booking-State")
 	w.Header().Set("HX-Refresh", "true")
 	w.WriteHeader(http.StatusOK)
 }

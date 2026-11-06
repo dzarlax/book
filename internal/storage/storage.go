@@ -32,7 +32,7 @@ func New(databaseURL string) (*Storage, error) {
 }
 
 func (s *Storage) Migrate(migrationsDir string) error {
-	for _, f := range []string{"001_init.sql", "002_meeting_type_hours.sql"} {
+	for _, f := range []string{"001_init.sql", "002_meeting_type_hours.sql", "003_booking_calendar_snapshot.sql"} {
 		data, err := os.ReadFile(migrationsDir + "/" + f)
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", f, err)
@@ -152,7 +152,7 @@ func (s *Storage) CreateBooking(ctx context.Context, b *model.Booking) error {
 
 func (s *Storage) ListBookings(ctx context.Context, from, to time.Time) ([]model.Booking, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT b.id, b.meeting_type_id, COALESCE(mt.title, ''), b.guest_name, b.guest_email, b.start_time, b.end_time, b.timezone, b.status, b.calendar_event_id, b.created_at
+		`SELECT b.id, b.meeting_type_id, COALESCE(mt.title, ''), b.guest_name, b.guest_email, b.start_time, b.end_time, b.timezone, b.status, b.calendar_event_id, b.created_at, COALESCE(b.calendar_id_snapshot, '')
 		 FROM bookings b LEFT JOIN meeting_types mt ON mt.id = b.meeting_type_id
 		 WHERE b.start_time >= $1 AND b.start_time < $2 ORDER BY b.start_time`,
 		from, to,
@@ -165,7 +165,7 @@ func (s *Storage) ListBookings(ctx context.Context, from, to time.Time) ([]model
 	var bookings []model.Booking
 	for rows.Next() {
 		var b model.Booking
-		if err := rows.Scan(&b.ID, &b.MeetingTypeID, &b.MeetingTypeTitle, &b.GuestName, &b.GuestEmail, &b.StartTime, &b.EndTime, &b.Timezone, &b.Status, &b.CalendarEvent, &b.CreatedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.MeetingTypeID, &b.MeetingTypeTitle, &b.GuestName, &b.GuestEmail, &b.StartTime, &b.EndTime, &b.Timezone, &b.Status, &b.CalendarEvent, &b.CreatedAt, &b.CalendarIDSnapshot); err != nil {
 			return nil, err
 		}
 		bookings = append(bookings, b)
@@ -175,12 +175,23 @@ func (s *Storage) ListBookings(ctx context.Context, from, to time.Time) ([]model
 
 func (s *Storage) GetBookingsForDay(ctx context.Context, date time.Time, meetingTypeID int64) ([]model.Booking, error) {
 	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
-	endOfDay := startOfDay.Add(24 * time.Hour)
+	endOfDay := startOfDay.AddDate(0, 0, 1)
+	var buffer int
+	if err := s.db.QueryRowContext(ctx, `SELECT buffer_min FROM meeting_types WHERE id=$1`, meetingTypeID).Scan(&buffer); err != nil {
+		return nil, err
+	}
+	if buffer < 0 {
+		return nil, ErrBookingStateConflict
+	}
+	endOfDay = endOfDay.Add(time.Duration(buffer) * time.Minute)
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, meeting_type_id, guest_name, guest_email, start_time, end_time, timezone, status, calendar_event_id, created_at
-		 FROM bookings WHERE meeting_type_id = $1 AND start_time >= $2 AND start_time < $3 AND status = 'confirmed' ORDER BY start_time`,
-		meetingTypeID, startOfDay, endOfDay,
+		`SELECT b.id, b.meeting_type_id, b.guest_name, b.guest_email, b.start_time,
+		 b.end_time + make_interval(mins => greatest(mt.buffer_min, 0)), b.timezone, b.status, b.calendar_event_id, b.created_at
+		 FROM bookings b JOIN meeting_types mt ON mt.id = b.meeting_type_id
+		 WHERE b.start_time < $2 AND b.end_time + make_interval(mins => greatest(mt.buffer_min, 0)) > $1
+		 AND b.status IN ('confirmed', 'pending', 'unknown', 'dispatching', 'cancelling') ORDER BY b.start_time`,
+		startOfDay, endOfDay,
 	)
 	if err != nil {
 		return nil, err
@@ -201,9 +212,9 @@ func (s *Storage) GetBookingsForDay(ctx context.Context, date time.Time, meeting
 func (s *Storage) GetBooking(ctx context.Context, id int64) (*model.Booking, error) {
 	var b model.Booking
 	err := s.db.QueryRowContext(ctx,
-		`SELECT b.id, b.meeting_type_id, COALESCE(mt.title, ''), b.guest_name, b.guest_email, b.start_time, b.end_time, b.timezone, b.status, b.calendar_event_id, b.created_at
+		`SELECT b.id, b.meeting_type_id, COALESCE(mt.title, ''), b.guest_name, b.guest_email, b.start_time, b.end_time, b.timezone, b.status, b.calendar_event_id, b.created_at, COALESCE(b.calendar_id_snapshot, '')
 		 FROM bookings b LEFT JOIN meeting_types mt ON mt.id = b.meeting_type_id WHERE b.id = $1`, id,
-	).Scan(&b.ID, &b.MeetingTypeID, &b.MeetingTypeTitle, &b.GuestName, &b.GuestEmail, &b.StartTime, &b.EndTime, &b.Timezone, &b.Status, &b.CalendarEvent, &b.CreatedAt)
+	).Scan(&b.ID, &b.MeetingTypeID, &b.MeetingTypeTitle, &b.GuestName, &b.GuestEmail, &b.StartTime, &b.EndTime, &b.Timezone, &b.Status, &b.CalendarEvent, &b.CreatedAt, &b.CalendarIDSnapshot)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -222,17 +233,17 @@ func (s *Storage) GetMeetingTypeByID(ctx context.Context, id int64) (*model.Meet
 }
 
 func (s *Storage) CancelBooking(ctx context.Context, id int64) error {
-	_, err := s.db.ExecContext(ctx, "UPDATE bookings SET status = 'cancelled' WHERE id = $1", id)
+	_, err := s.BeginCancellation(ctx, id)
 	return err
 }
 
 func (s *Storage) CountBookingsForDay(ctx context.Context, date time.Time, meetingTypeID int64) (int, error) {
 	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
-	endOfDay := startOfDay.Add(24 * time.Hour)
+	endOfDay := startOfDay.AddDate(0, 0, 1)
 
 	var count int
 	err := s.db.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM bookings WHERE meeting_type_id = $1 AND start_time >= $2 AND start_time < $3 AND status = 'confirmed'",
+		"SELECT COUNT(*) FROM bookings WHERE meeting_type_id = $1 AND start_time >= $2 AND start_time < $3 AND status IN ('confirmed', 'pending', 'unknown', 'dispatching', 'cancelling')",
 		meetingTypeID, startOfDay, endOfDay,
 	).Scan(&count)
 	return count, err
