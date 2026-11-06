@@ -76,19 +76,9 @@ func (c *Client) ListCalendars(ctx context.Context) ([]Calendar, error) {
 	return cals, nil
 }
 
-// GetEvents returns events from a specific calendar for the given time range.
+// GetEvents reads complete expanded events through the typed V2 read API.
 func (c *Client) GetEvents(ctx context.Context, calendarID string, start, end time.Time) ([]Event, error) {
-	params := url.Values{
-		"calendar_id": {calendarID},
-		"start":       {start.UTC().Format(time.RFC3339)},
-		"end":         {end.UTC().Format(time.RFC3339)},
-	}
-
-	var events []Event
-	if err := c.get(ctx, "/api/events?"+params.Encode(), &events); err != nil {
-		return nil, err
-	}
-	return events, nil
+	return c.getExpandedEvents(ctx, calendarID, start, end)
 }
 
 // CreateEvent creates a calendar event and returns the created event.
@@ -136,7 +126,14 @@ func (c *Client) get(ctx context.Context, path string, result any) error {
 	if resp.StatusCode >= 400 {
 		return c.readError(resp)
 	}
-	return json.NewDecoder(resp.Body).Decode(result)
+	decoder := json.NewDecoder(io.LimitReader(resp.Body, 8<<20))
+	if err := decoder.Decode(result); err != nil {
+		return err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return fmt.Errorf("calendar api response contains trailing or invalid JSON")
+	}
+	return nil
 }
 
 func (c *Client) post(ctx context.Context, path string, body, result any) error {

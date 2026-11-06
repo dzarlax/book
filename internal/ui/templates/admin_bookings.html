@@ -13,6 +13,7 @@
 
 {{template "admin_nav" "bookings"}}
 
+<p id="cancellation-notice" role="alert" hidden style="color:var(--text-tertiary);margin-top:16px"></p>
 <div class="table-wrap">
 <table>
     <thead>
@@ -37,15 +38,30 @@
             <td>
                 {{if eq .Status "confirmed"}}
                 <span class="badge badge--success">Confirmed</span>
-                {{else}}
+                {{else if eq .Status "cancelled"}}
                 <span class="badge badge--danger">Cancelled</span>
+                {{else if eq .Status "pending"}}
+                <span class="badge">Pending confirmation</span>
+                <p class="card__meta">Check the calendar before taking further action.</p>
+                {{else if eq .Status "cancelling"}}
+                <span class="badge">Cancellation needs verification</span>
+                <p class="card__meta">Check the calendar manually before cancelling or booking again.</p>
+                {{else if eq .Status "unknown"}}
+                <span class="badge">Outcome unknown</span>
+                <p class="card__meta">Verify the calendar manually. Do not create or cancel another event yet.</p>
+                {{else}}
+                <span class="badge">Needs review</span>
+                <p class="card__meta">Verify the calendar manually before taking action.</p>
                 {{end}}
             </td>
             <td style="text-align:right">
-                {{if eq .Status "confirmed"}}
+                {{if and (eq .Status "confirmed") .CalendarIDSnapshot .CalendarEvent}}
                 <button class="btn btn--danger btn--small"
+                        data-cancel-booking
                         hx-post="/admin/bookings/{{.ID}}/cancel"
                         hx-confirm="Cancel this booking?">Cancel</button>
+                {{else if eq .Status "confirmed"}}
+                <span class="card__meta">Original calendar not recorded. Verify and cancel manually.</span>
                 {{end}}
             </td>
         </tr>
@@ -56,5 +72,30 @@
 </table>
 </div>
 
+<script>
+(function() {
+    var notice = document.getElementById('cancellation-notice');
+    function cancellationButton(detail) {
+        return detail.elt && detail.elt.hasAttribute('data-cancel-booking') ? detail.elt : null;
+    }
+    document.body.addEventListener('htmx:beforeRequest', function(event) {
+        var button = cancellationButton(event.detail);
+        if (!button) return;
+        if (button.dataset.cancellationSent) { event.preventDefault(); return; }
+        button.dataset.cancellationSent = 'true';
+        button.disabled = true;
+        button.textContent = 'Verifying…';
+    });
+    ['htmx:responseError', 'htmx:sendError', 'htmx:timeout'].forEach(function(name) {
+        document.body.addEventListener(name, function(event) {
+            var button = cancellationButton(event.detail);
+            if (!button) return;
+            button.disabled = true;
+            notice.hidden = false;
+            notice.textContent = 'Cancellation was not confirmed. Check the calendar and refresh booking status before taking further action. Do not repeat the cancellation.';
+        });
+    });
+})();
+</script>
 {{template "foot" .}}
 {{end}}
